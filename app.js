@@ -9,7 +9,7 @@
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
     courses: [], finances: [], goals: [], templates: [], foods: [],
-    settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0, calorieGoal: 2400, matchWeight: null },
+    settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0, calorieGoal: 2400, matchWeight: null, nextEvent: { name: "", date: "" } },
   };
 
   function load() {
@@ -221,15 +221,56 @@
   });
 
   // Nutrition — food log
+  const COMMON_FOODS = [
+    { name: "Banana", cal: 105, p: 1, c: 27, f: 0 },
+    { name: "Chicken breast (6oz)", cal: 280, p: 52, c: 0, f: 6 },
+    { name: "White rice (1 cup)", cal: 205, p: 4, c: 45, f: 0 },
+    { name: "Greek yogurt", cal: 150, p: 15, c: 8, f: 4 },
+    { name: "PB&J sandwich", cal: 350, p: 14, c: 40, f: 16 },
+    { name: "Protein shake", cal: 160, p: 30, c: 5, f: 2 },
+    { name: "2 eggs", cal: 140, p: 12, c: 1, f: 10 },
+    { name: "Apple", cal: 95, p: 0, c: 25, f: 0 },
+    { name: "Granola bar", cal: 190, p: 4, c: 29, f: 7 },
+    { name: "Turkey sandwich", cal: 320, p: 24, c: 35, f: 9 },
+    { name: "Chocolate milk (cup)", cal: 190, p: 8, c: 26, f: 6 },
+    { name: "Pasta (1 cup)", cal: 220, p: 8, c: 43, f: 1 },
+  ];
+
   const foodForm = document.getElementById("food-form");
   document.getElementById("f-date").value = todayISO();
   foodForm.addEventListener("submit", (e) => {
     e.preventDefault();
     data.foods.push({
       id: uid(), date: val("f-date"), name: val("f-name").trim(),
-      cal: int("f-cal"), meal: val("f-meal"),
+      cal: int("f-cal"), p: int("f-p"), c: int("f-c"), f: int("f-f"), meal: val("f-meal"),
     });
     save(); foodForm.reset(); document.getElementById("f-date").value = todayISO(); render();
+  });
+
+  document.getElementById("quick-add").addEventListener("click", (e) => {
+    const b = e.target.closest(".qa-chip");
+    if (!b) return;
+    const f = COMMON_FOODS[+b.dataset.i];
+    data.foods.push({ id: uid(), date: todayISO(), name: f.name, cal: f.cal, p: f.p, c: f.c, f: f.f, meal: "Snack" });
+    save(); render();
+  });
+
+  function renderQuickAdd() {
+    document.getElementById("quick-add").innerHTML =
+      `<span class="qa-label">Quick add:</span>` +
+      COMMON_FOODS.map((f, i) => `<button class="qa-chip" data-i="${i}" type="button">${esc(f.name)} <small>${f.cal}</small></button>`).join("");
+  }
+  renderQuickAdd();
+
+  // Game week
+  document.getElementById("gw-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.settings.nextEvent = { name: val("gw-name").trim(), date: val("gw-date") };
+    save(); render();
+  });
+  document.getElementById("gw-clear").addEventListener("click", () => {
+    data.settings.nextEvent = { name: "", date: "" };
+    save(); render();
   });
 
   // Strength / lifts
@@ -465,6 +506,38 @@
 
     renderDashLunch();
     renderStreaks();
+    renderGameWeek();
+  }
+
+  function renderGameWeek() {
+    const ev = (data.settings.nextEvent) || { name: "", date: "" };
+    document.getElementById("gw-name").value = ev.name || "";
+    document.getElementById("gw-date").value = ev.date || "";
+    const body = document.getElementById("gw-body");
+    if (!ev.date) {
+      body.innerHTML = `<p class="hint">Set your next game or match and I'll build a day-by-day plan — training, study, and fueling.</p>`;
+      return;
+    }
+    const d = daysUntil(ev.date);
+    const name = esc(ev.name || "Your event");
+    if (d < 0) { body.innerHTML = `<p class="hint">${name} has passed — set your next one above.</p>`; return; }
+
+    let phase, plan;
+    if (d > 7) { phase = "Build"; plan = ["Train hard — normal lifts and conditioning.", "Eat and sleep well to build.", "Get ahead on schoolwork now while the week is open."]; }
+    else if (d >= 3) { phase = "Sharpen"; plan = ["Ease intensity slightly; sharpen technique and speed.", "Stay consistent with fueling and hydration.", "Clear assignments due this week early."]; }
+    else if (d >= 1) { phase = "Taper"; plan = ["Light movement only — rest and recover.", "Hydrate well and prioritize sleep.", "Don't try any new foods or routines.", "Pack your gear tonight."]; }
+    else { phase = "Game day"; plan = ["Eat a familiar meal about 3 hours before.", "Hydrate steadily through the day.", "Do your full dynamic warm-up.", "Trust your training — go compete. 🔥"]; }
+
+    const dueBefore = data.school.filter((s) => !s.done && s.due && s.due <= ev.date).length;
+    const cd = d === 0 ? "Today" : d === 1 ? "Tomorrow" : `in ${d} days`;
+    body.innerHTML = `
+      <div class="gw-count">
+        <span class="gw-d">${d === 0 ? "🏆" : d}</span>
+        <div><div class="gw-name">${name}</div><div class="gw-when">${cd} · ${fmtDate(ev.date)}</div></div>
+        <span class="badge gw-phase">${phase}</span>
+      </div>
+      ${dueBefore ? `<div class="sug"><span class="sug-i">📚</span><span>${dueBefore} school item${dueBefore > 1 ? "s" : ""} due before ${name} — knock ${dueBefore > 1 ? "them" : "it"} out early so game week stays calm.</span></div>` : ""}
+      <ul class="gw-plan">${plan.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>`;
   }
 
   function fillMini(id, items, map, emptyMsg) {
@@ -913,6 +986,10 @@
 
     document.getElementById("cal-summary").textContent =
       `${n.consumed} of ${n.goal} cal today · ${n.remaining >= 0 ? n.remaining + " left" : Math.abs(n.remaining) + " over"}`;
+    const P = n.foods.reduce((s, f) => s + (f.p || 0), 0);
+    const C = n.foods.reduce((s, f) => s + (f.c || 0), 0);
+    const F = n.foods.reduce((s, f) => s + (f.f || 0), 0);
+    document.getElementById("macro-summary").textContent = `Protein ${P}g · Carbs ${C}g · Fat ${F}g`;
     const fill = document.getElementById("cal-fill");
     fill.style.width = pctEl + "%";
     fill.style.background = n.remaining < 0
@@ -925,7 +1002,7 @@
       <div class="item"><div class="item-body">
         <div class="item-title">${esc(f.name)}</div>
         <div class="item-sub"><span class="badge">${esc(f.meal || "Snack")}</span>
-        <span>${f.cal} cal</span><span>${pointsFor(f.cal)} pts</span><span>${fmtDate(f.date)}</span></div></div>
+        <span>${f.cal} cal</span><span>${pointsFor(f.cal)} pts</span>${(f.p || f.c || f.f) ? `<span>${f.p || 0}P · ${f.c || 0}C · ${f.f || 0}F</span>` : ""}<span>${fmtDate(f.date)}</span></div></div>
         <button class="del" data-kind="foods" data-id="${f.id}">×</button></div>`).join("")
       : `<div class="empty-state">No foods logged yet. Track what you eat to manage your weight.</div>`;
   }

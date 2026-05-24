@@ -52,6 +52,17 @@
           <p id="brief-text" class="brief-text"></p>
         </div>
 
+        <div class="card" id="gameweek">
+          <h3>Game week</h3>
+          <form class="entry-form" id="gw-form" style="margin-bottom:14px">
+            <input type="text" id="gw-name" placeholder="Next game / match (e.g. Districts)">
+            <input type="date" id="gw-date">
+            <button type="submit">Set</button>
+            <button type="button" id="gw-clear" class="btn-ghost">Clear</button>
+          </form>
+          <div id="gw-body"></div>
+        </div>
+
         <div class="card">
           <h3>Ask your coach</h3>
           <form id="coach-form" class="entry-form stacked">
@@ -355,12 +366,17 @@
         <div class="card">
           <div class="cal-head">
             <span class="hint" id="cal-summary"></span>
+            <span class="hint" id="macro-summary"></span>
           </div>
           <div class="goal-bar"><div class="goal-fill" id="cal-fill"></div></div>
+          <div class="quick-add" id="quick-add"></div>
           <form class="entry-form" id="food-form">
             <input type="date" id="f-date" required>
             <input type="text" id="f-name" placeholder="Food (e.g. Chicken & rice)" required>
             <input type="number" id="f-cal" placeholder="Calories" min="0" required>
+            <input type="number" id="f-p" placeholder="P (g)" min="0">
+            <input type="number" id="f-c" placeholder="C (g)" min="0">
+            <input type="number" id="f-f" placeholder="F (g)" min="0">
             <select id="f-meal">
               <option value="Breakfast">Breakfast</option>
               <option value="Lunch">Lunch</option>
