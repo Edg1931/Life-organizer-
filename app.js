@@ -70,6 +70,7 @@
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     const el = document.getElementById("view-" + view);
     if (el) el.classList.add("active");
+    document.body.dataset.view = view;
     if (view === "lunch") loadLunch();
   }
 
@@ -593,6 +594,7 @@
     }
   });
 
+  document.body.dataset.view = "dashboard";
   render();
   // Try to warm the lunch cache in the background so the dashboard can show it.
   if (data.settings.lunchUrl) fetchLunch().then(() => renderDashLunch());
