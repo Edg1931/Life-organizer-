@@ -387,6 +387,9 @@ body[data-view="calendar"] { --section: #38bdf8; }
 .gw-name { font-weight: 700; font-size: 16px; }
 .gw-when { color: var(--muted); font-size: 13px; }
 .gw-phase { margin-left: auto; }
+.gw-details { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.gw-detail { display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 6px 11px; font-size: 13px; font-weight: 600; color: var(--text); }
+.gw-detail-ic { font-size: 13px; }
 .gw-plan { margin: 12px 0 0 18px; display: flex; flex-direction: column; gap: 7px; font-size: 14px; }
 
 /* REST TIMER */

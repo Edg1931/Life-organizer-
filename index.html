@@ -60,6 +60,8 @@
           <form class="entry-form" id="gw-form" style="margin-bottom:14px">
             <input type="text" id="gw-name" placeholder="Game / match (e.g. Districts)">
             <input type="date" id="gw-date">
+            <input type="time" id="gw-time">
+            <input type="text" id="gw-loc" placeholder="Where (optional)">
             <button type="submit">Add game</button>
           </form>
           <div id="gw-body"></div>
@@ -153,6 +155,7 @@
                 <input type="date" id="e-date" required>
                 <input type="time" id="e-time">
               </div>
+              <input type="text" id="e-loc" placeholder="Where (e.g. Lakewood High) — optional">
               <div class="row">
                 <select id="e-type">
                   <option value="Game">Game / Match</option>

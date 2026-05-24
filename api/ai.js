@@ -130,6 +130,7 @@ Rules:
 - Title: use the opponent and/or event name, keeping home/away if shown (e.g. "vs Lakewood", "@ Avon", "Districts", "Practice").
 - Dates: strict YYYY-MM-DD. Schedules often omit the year — infer it from the provided "today" date so each event lands in the correct, upcoming season (e.g. a fall schedule belongs to the current school year, not the past).
 - Times: 24-hour HH:MM. If no time is shown, use an empty string. Convert "7:00 PM" to "19:00".
+- Location: the place/venue if shown (e.g. "Lakewood High", "Home", "Avon Lake HS Gym"). If none is shown, use an empty string. Do not confuse the opponent with the location.
 - Type: exactly one of Game, Practice, Exam, Work, Personal. Matches/meets/tournaments/scrimmages are "Game"; team practices are "Practice".
 - If a row is unreadable or has no date, skip it rather than guessing.
 - Return ONLY valid JSON. No commentary, no code fences.`;
@@ -141,7 +142,7 @@ function scheduleInstruction(payload) {
   const noteLine = note
     ? `\n\nContext from the student (use it to label titles and pick the right type): "${note}".`
     : "";
-  return `Today's date is ${today}. Read this schedule photo and extract every dated event.${noteLine}\n\nReturn ONLY valid JSON in exactly this shape:\n{"events": [{"title": "vs Lakewood", "date": "2026-09-12", "time": "19:00", "type": "Game"}]}`;
+  return `Today's date is ${today}. Read this schedule photo and extract every dated event.${noteLine}\n\nReturn ONLY valid JSON in exactly this shape:\n{"events": [{"title": "vs Lakewood", "date": "2026-09-12", "time": "19:00", "location": "Lakewood High", "type": "Game"}]}`;
 }
 
 function isImageKind(kind) {

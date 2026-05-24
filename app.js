@@ -276,7 +276,7 @@
 
   document.getElementById("event-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    data.events.push({ id: uid(), title: val("e-title").trim(), date: val("e-date"), time: val("e-time"), type: val("e-type"), repeat: val("e-repeat") });
+    data.events.push({ id: uid(), title: val("e-title").trim(), date: val("e-date"), time: val("e-time"), location: val("e-loc").trim(), type: val("e-type"), repeat: val("e-repeat") });
     save(); e.target.reset(); document.getElementById("e-date").value = calSelected; render();
   });
   document.getElementById("cal-prev").addEventListener("click", () => { calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
@@ -294,7 +294,7 @@
     e.preventDefault();
     const date = val("gw-date");
     if (!date) return;
-    data.events.push({ id: uid(), title: val("gw-name").trim() || "Game", date, time: "", type: "Game", repeat: "none" });
+    data.events.push({ id: uid(), title: val("gw-name").trim() || "Game", date, time: val("gw-time"), location: val("gw-loc").trim(), type: "Game", repeat: "none" });
     save(); e.target.reset(); render();
   });
 
@@ -781,11 +781,18 @@
 
     const dueBefore = data.school.filter((s) => !s.done && s.due && s.due <= g.date).length;
     const cd = d === 0 ? "Today" : d === 1 ? "Tomorrow" : `in ${d} days`;
+    const time = g.ref && g.ref.time ? fmtTime(g.ref.time) : "";
+    const where = g.ref && g.ref.location ? String(g.ref.location).trim() : "";
     body.innerHTML = `
       <div class="gw-count">
         <span class="gw-d">${d === 0 ? "🏆" : d}</span>
-        <div><div class="gw-name">${name}</div><div class="gw-when">${cd} · ${fmtDate(g.date)}</div></div>
+        <div><div class="gw-name">${name}</div><div class="gw-when">${cd}</div></div>
         <span class="badge gw-phase">${phase}</span>
+      </div>
+      <div class="gw-details">
+        <span class="gw-detail"><span class="gw-detail-ic">📅</span>${fmtDate(g.date)}</span>
+        ${time ? `<span class="gw-detail"><span class="gw-detail-ic">⏰</span>${esc(time)}</span>` : ""}
+        ${where ? `<span class="gw-detail"><span class="gw-detail-ic">📍</span>${esc(where)}</span>` : ""}
       </div>
       ${dueBefore ? `<div class="sug"><span class="sug-i">📚</span><span>${dueBefore} school item${dueBefore > 1 ? "s" : ""} due before ${name} — knock ${dueBefore > 1 ? "them" : "it"} out early so game week stays calm.</span></div>` : ""}
       <ul class="gw-plan">${plan.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>`;
@@ -872,10 +879,11 @@
     el.innerHTML = items.length ? items.map((it) => {
       const meta = it.kind === "school" ? "School due" : it.kind === "game" ? "Game week" : esc(it.ref.type || "Event") + (it.ref.repeat === "weekly" ? " · weekly" : "");
       const timeStr = it.kind === "event" && it.ref.time ? fmtTime(it.ref.time) : "";
+      const loc = it.kind === "event" && it.ref.location ? it.ref.location : "";
       const sport = it.kind === "event" ? it.ref.sport : null;
       const sportLink = sport ? `<button class="sport-link" data-sport="${esc(sport)}">${sport === "track" ? "Track & PV" : "Log stats"} ›</button>` : "";
       return `<div class="item"><div class="item-body"><div class="item-title">${esc(it.label)}</div>
-        <div class="item-sub"><span class="badge ${it.cls}">${meta}</span>${timeStr ? `<span>${timeStr}</span>` : ""}${sportLink}</div></div>
+        <div class="item-sub"><span class="badge ${it.cls}">${meta}</span>${timeStr ? `<span>${timeStr}</span>` : ""}${loc ? `<span>📍 ${esc(loc)}</span>` : ""}${sportLink}</div></div>
         ${it.kind === "event" ? `<button class="del" data-kind="events" data-id="${it.ref.id}">×</button>` : ""}</div>`;
     }).join("") : `<div class="empty-state">Nothing scheduled. Add an event below.</div>`;
   }
@@ -1892,6 +1900,7 @@
           <input type="text" class="sched-f sched-title" value="${esc(ev.title || "")}" placeholder="Event">
           <input type="date" class="sched-f sched-date" value="${esc(ev.date)}">
           <input type="time" class="sched-f sched-time" value="${esc(ev.time || "")}">
+          <input type="text" class="sched-f sched-loc" value="${esc(ev.location || "")}" placeholder="Where">
           <select class="sched-f sched-type">${EVENT_TYPES.map((t) => `<option value="${t}"${t === type ? " selected" : ""}>${t}</option>`).join("")}</select>
         </div>`;
       }).join("")}</div>
@@ -1916,8 +1925,9 @@
       if (!date) return;
       const title = row.querySelector(".sched-title").value.trim();
       const time = row.querySelector(".sched-time").value;
+      const location = row.querySelector(".sched-loc").value.trim();
       const type = row.querySelector(".sched-type").value;
-      const ev = { id: uid(), title: title || type, date, time, type, repeat: "none" };
+      const ev = { id: uid(), title: title || type, date, time, location, type, repeat: "none" };
       if (sport) ev.sport = sport;
       data.events.push(ev);
       added++;
