@@ -556,7 +556,35 @@
     renderVolumeChart();
     renderSuggestions();
     renderLiftChart();
+    renderTonnage();
     renderTemplates();
+  }
+
+  function latestWeight() {
+    const c = [...data.checkins].sort((a, b) => b.date.localeCompare(a.date)).find((x) => x.weight != null);
+    return c ? c.weight : null;
+  }
+
+  function renderTonnage() {
+    const el = document.getElementById("vol-strength");
+    const weeks = [];
+    const start = mondayOf(new Date());
+    for (let i = 7; i >= 0; i--) {
+      const ws = new Date(start); ws.setDate(ws.getDate() - i * 7);
+      const we = new Date(ws); we.setDate(we.getDate() + 7);
+      const ton = data.lifts
+        .filter((l) => { const d = new Date(l.date + "T00:00:00"); return d >= ws && d < we; })
+        .reduce((s, l) => s + (l.weight || 0) * (l.reps || 0) * (l.sets || 1), 0);
+      weeks.push({ label: `${ws.getMonth() + 1}/${ws.getDate()}`, ton });
+    }
+    const max = Math.max(1, ...weeks.map((w) => w.ton));
+    const fmt = (v) => (v >= 1000 ? (v / 1000).toFixed(1) + "k" : String(v));
+    el.innerHTML = weeks.map((w) => `
+      <div class="bar-wrap" title="${w.ton.toLocaleString()} lb">
+        <span class="bar-val">${w.ton ? fmt(w.ton) : ""}</span>
+        <div class="bar" style="height:${(w.ton / max) * 100}%"></div>
+        <span class="bar-label">${w.label}</span>
+      </div>`).join("");
   }
 
   function renderTemplates() {
@@ -759,12 +787,14 @@
       if (oneRm > e.oneRm) e.oneRm = oneRm;
     });
     const prs = Object.values(byEx).sort((a, b) => b.oneRm - a.oneRm);
+    const bw = latestWeight();
     const prEl = document.getElementById("lift-prs");
     prEl.innerHTML = prs.length ? prs.map((e) => `
       <div class="pr-card">
         <div class="pr-name">${esc(e.name)}</div>
         <div class="pr-val">${trimNum(e.maxWeight)}<small> lb × ${e.bestSet.reps}</small></div>
         <div class="pr-sub">est. 1RM ${trimNum(Math.round(e.oneRm))} lb</div>
+        ${bw ? `<div class="pr-ratio">${(e.maxWeight / bw).toFixed(2)}× bodyweight</div>` : ""}
         <a class="vid-link" href="${ytSearch(e.name + " proper form technique")}" target="_blank" rel="noopener">▶ Form video</a>
       </div>`).join("") : `<div class="empty-state">Log a lift to start tracking PRs.</div>`;
 

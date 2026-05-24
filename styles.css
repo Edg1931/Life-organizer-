@@ -354,6 +354,7 @@ body[data-view="nutrition"] { --section: #fb923c; }
 .pr-val { font-family: "Space Grotesk", sans-serif; font-size: 22px; font-weight: 700; margin-top: 4px; }
 .pr-val small { font-size: 13px; color: var(--muted); font-weight: 600; }
 .pr-sub { font-size: 12px; color: var(--green); margin-top: 4px; font-weight: 600; }
+.pr-ratio { font-size: 12px; color: var(--accent); margin-top: 2px; font-weight: 700; }
 
 /* AI */
 .brief-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; position: relative; z-index: 1; }
