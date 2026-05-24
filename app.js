@@ -1581,6 +1581,109 @@
       </div>`).join("");
   }
 
+  // ============ SCHEDULE IMPORT (photo → calendar) ============
+  let schedImage = null;
+  const EVENT_TYPES = ["Game", "Practice", "Exam", "Work", "Personal"];
+
+  document.getElementById("sched-photo").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizePhoto(file, 1600, 0.85);
+      schedImage = { mediaType: "image/jpeg", data: dataUrl.split(",")[1] };
+      const prev = document.getElementById("sched-preview");
+      prev.src = dataUrl; prev.hidden = false;
+      document.getElementById("sched-drop-empty").hidden = true;
+      document.getElementById("sched-drop").classList.add("has-photo");
+      document.getElementById("sched-controls").hidden = false;
+    } catch {
+      alert("Couldn't read that image. Try another photo.");
+    }
+  });
+
+  function clearSchedPhoto() {
+    schedImage = null;
+    document.getElementById("sched-photo").value = "";
+    const prev = document.getElementById("sched-preview");
+    prev.src = ""; prev.hidden = true;
+    document.getElementById("sched-drop-empty").hidden = false;
+    document.getElementById("sched-drop").classList.remove("has-photo");
+    document.getElementById("sched-controls").hidden = true;
+  }
+
+  document.getElementById("sched-clear").addEventListener("click", () => {
+    clearSchedPhoto();
+    document.getElementById("sched-result").innerHTML = "";
+  });
+
+  document.getElementById("sched-scan").addEventListener("click", async () => {
+    if (!schedImage) return;
+    const out = document.getElementById("sched-result");
+    const btn = document.getElementById("sched-scan");
+    btn.disabled = true;
+    out.innerHTML = `<div class="tutor-loading"><span class="spinner"></span>Reading your schedule…</div>`;
+    try {
+      const note = document.getElementById("sched-note").value.trim();
+      const json = await aiCallFull("schedule-import", { today: todayISO(), note, image: schedImage });
+      const events = json.data && Array.isArray(json.data.events) ? json.data.events : [];
+      renderSchedReview(out, events);
+    } catch (err) {
+      out.innerHTML = `<div class="tutor-error">${esc(aiErrorText(err))}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function renderSchedReview(out, events) {
+    const valid = (events || []).filter((ev) => ev && ev.date);
+    if (!valid.length) {
+      out.innerHTML = `<div class="tutor-error">Couldn't find any dated events. Try a clearer, straight-on photo of the schedule.</div>`;
+      return;
+    }
+    out.innerHTML = `<div class="sched-review">
+      <p class="sched-review-head"><strong>${valid.length}</strong> event${valid.length > 1 ? "s" : ""} found — uncheck any you don't want, and fix anything that's off.</p>
+      <div class="sched-rows">${valid.map((ev) => {
+        const type = EVENT_TYPES.includes(ev.type) ? ev.type : "Game";
+        return `<div class="sched-row">
+          <input type="checkbox" class="check sched-pick" checked>
+          <input type="text" class="sched-f sched-title" value="${esc(ev.title || "")}" placeholder="Event">
+          <input type="date" class="sched-f sched-date" value="${esc(ev.date)}">
+          <input type="time" class="sched-f sched-time" value="${esc(ev.time || "")}">
+          <select class="sched-f sched-type">${EVENT_TYPES.map((t) => `<option value="${t}"${t === type ? " selected" : ""}>${t}</option>`).join("")}</select>
+        </div>`;
+      }).join("")}</div>
+      <div class="sched-actions">
+        <button type="button" id="sched-add">Add to calendar</button>
+        <button type="button" class="btn-ghost" id="sched-cancel">Cancel</button>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById("sched-result").addEventListener("click", (e) => {
+    if (e.target.closest("#sched-cancel")) {
+      document.getElementById("sched-result").innerHTML = "";
+      return;
+    }
+    if (!e.target.closest("#sched-add")) return;
+    let added = 0;
+    document.querySelectorAll(".sched-row").forEach((row) => {
+      if (!row.querySelector(".sched-pick").checked) return;
+      const date = row.querySelector(".sched-date").value;
+      if (!date) return;
+      const title = row.querySelector(".sched-title").value.trim();
+      const time = row.querySelector(".sched-time").value;
+      const type = row.querySelector(".sched-type").value;
+      data.events.push({ id: uid(), title: title || type, date, time, type, repeat: "none" });
+      added++;
+    });
+    if (!added) return;
+    save();
+    render();
+    clearSchedPhoto();
+    document.getElementById("sched-result").innerHTML =
+      `<div class="sched-success">✓ Added ${added} event${added > 1 ? "s" : ""} to your calendar.</div>`;
+  });
+
   // Jump links (e.g. "Homework Helper" from the School hint).
   document.querySelector(".content").addEventListener("click", (e) => {
     const lb = e.target.closest(".link-btn[data-view]");

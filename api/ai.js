@@ -119,6 +119,31 @@ function isTutorKind(kind) {
   return kind === "tutor-explain" || kind === "tutor-flashcards" || kind === "tutor-quiz";
 }
 
+const SCHEDULE_SYSTEM = `You extract sports and event schedules from images into clean structured calendar data for "Life Hub", a high-school student's planner.
+
+Rules:
+- Extract every distinct dated event you can read: games, matches, meets, tournaments, scrimmages, practices, etc.
+- Title: use the opponent and/or event name, keeping home/away if shown (e.g. "vs Lakewood", "@ Avon", "Districts", "Practice").
+- Dates: strict YYYY-MM-DD. Schedules often omit the year — infer it from the provided "today" date so each event lands in the correct, upcoming season (e.g. a fall schedule belongs to the current school year, not the past).
+- Times: 24-hour HH:MM. If no time is shown, use an empty string. Convert "7:00 PM" to "19:00".
+- Type: exactly one of Game, Practice, Exam, Work, Personal. Matches/meets/tournaments/scrimmages are "Game"; team practices are "Practice".
+- If a row is unreadable or has no date, skip it rather than guessing.
+- Return ONLY valid JSON. No commentary, no code fences.`;
+
+function scheduleInstruction(payload) {
+  const p = payload || {};
+  const today = (p.today || "").slice(0, 10);
+  const note = (p.note || "").slice(0, 300).trim();
+  const noteLine = note
+    ? `\n\nContext from the student (use it to label titles and pick the right type): "${note}".`
+    : "";
+  return `Today's date is ${today}. Read this schedule photo and extract every dated event.${noteLine}\n\nReturn ONLY valid JSON in exactly this shape:\n{"events": [{"title": "vs Lakewood", "date": "2026-09-12", "time": "19:00", "type": "Game"}]}`;
+}
+
+function isImageKind(kind) {
+  return isTutorKind(kind) || kind === "schedule-import";
+}
+
 // Pull a JSON object out of the model's reply, tolerating stray text or code fences.
 function parseJSON(text) {
   if (!text) return null;
@@ -160,10 +185,14 @@ export default async function handler(req, res) {
 
   const client = new Anthropic({ apiKey });
 
-  // ---- Homework tutor (subject-aware, supports a photo) ----
-  if (isTutorKind(kind)) {
-    const instruction = tutorInstruction(kind, payload);
+  // ---- Image-based features: homework tutor + schedule import ----
+  if (isImageKind(kind)) {
+    const isSchedule = kind === "schedule-import";
+    const instruction = isSchedule ? scheduleInstruction(payload) : tutorInstruction(kind, payload);
     const img = payload.image;
+    if (isSchedule && !img) {
+      return res.status(400).json({ error: "Add a photo of the schedule first." });
+    }
     if (!instruction || (!img && !(payload.question || "").trim())) {
       return res.status(400).json({ error: "Add a photo of the homework or type the question first." });
     }
@@ -180,8 +209,8 @@ export default async function handler(req, res) {
     try {
       const message = await client.messages.create({
         model: MODEL,
-        max_tokens: 1800,
-        system: [{ type: "text", text: tutorSystem(payload.subject), cache_control: { type: "ephemeral" } }],
+        max_tokens: isSchedule ? 2000 : 1800,
+        system: [{ type: "text", text: isSchedule ? SCHEDULE_SYSTEM : tutorSystem(payload.subject), cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content }],
       });
       const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();

@@ -106,6 +106,27 @@
       <!-- CALENDAR -->
       <section class="view" id="view-calendar">
         <div class="page-head"><h1>Calendar</h1></div>
+
+        <div class="card sched-import">
+          <h3>Import a schedule from a photo</h3>
+          <p class="hint">Upload a picture of your team's schedule — AI pulls out the games and practices so you can review and add them all in one tap.</p>
+          <label class="photo-drop compact" id="sched-drop">
+            <input type="file" id="sched-photo" accept="image/*" capture="environment">
+            <div class="photo-drop-empty" id="sched-drop-empty">
+              <span class="photo-ic">🗓️</span>
+              <span class="photo-label">Upload schedule photo</span>
+              <span class="photo-hint">A team handout, printout, or screenshot works great</span>
+            </div>
+            <img id="sched-preview" class="photo-preview" alt="Schedule preview" hidden>
+          </label>
+          <div class="import-controls" id="sched-controls" hidden>
+            <input type="text" id="sched-note" class="sched-note" placeholder="Optional: sport or team (e.g. Avon Lake wrestling)">
+            <button type="button" id="sched-scan">Scan schedule</button>
+            <button type="button" class="btn-ghost" id="sched-clear">Remove</button>
+          </div>
+          <div id="sched-result" class="sched-result"></div>
+        </div>
+
         <div class="cal-layout">
           <div class="card cal-main">
             <div class="cal-nav">
