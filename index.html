@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Life Organizer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">LO</span>
+      <h1>Life Organizer</h1>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="dashboard">Dashboard</button>
+      <button class="tab" data-view="workouts">Workouts</button>
+      <button class="tab" data-view="school">School</button>
+      <button class="tab" data-view="tasks">Tasks</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- DASHBOARD -->
+    <section class="view active" id="view-dashboard">
+      <h2 class="view-title">Today at a glance</h2>
+      <div class="stats" id="stats"></div>
+
+      <div class="dash-grid">
+        <div class="card">
+          <h3>Upcoming school deadlines</h3>
+          <ul class="mini-list" id="dash-school"></ul>
+        </div>
+        <div class="card">
+          <h3>This week's workouts</h3>
+          <ul class="mini-list" id="dash-workouts"></ul>
+        </div>
+        <div class="card">
+          <h3>Open tasks</h3>
+          <ul class="mini-list" id="dash-tasks"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- WORKOUTS -->
+    <section class="view" id="view-workouts">
+      <h2 class="view-title">Sports Workouts</h2>
+      <form class="entry-form" id="workout-form">
+        <input type="text" id="w-activity" placeholder="Activity (e.g. Soccer, Running)" required>
+        <select id="w-type">
+          <option value="Cardio">Cardio</option>
+          <option value="Strength">Strength</option>
+          <option value="Team Sport">Team Sport</option>
+          <option value="Flexibility">Flexibility</option>
+          <option value="Other">Other</option>
+        </select>
+        <input type="number" id="w-duration" placeholder="Min" min="1" required>
+        <input type="date" id="w-date" required>
+        <input type="text" id="w-notes" placeholder="Notes (optional)">
+        <button type="submit">Add</button>
+      </form>
+      <div class="list" id="workout-list"></div>
+    </section>
+
+    <!-- SCHOOL -->
+    <section class="view" id="view-school">
+      <h2 class="view-title">School</h2>
+      <form class="entry-form" id="school-form">
+        <input type="text" id="s-title" placeholder="Assignment / exam" required>
+        <input type="text" id="s-subject" placeholder="Subject" required>
+        <select id="s-priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+        <input type="date" id="s-due" required>
+        <button type="submit">Add</button>
+      </form>
+      <div class="list" id="school-list"></div>
+    </section>
+
+    <!-- TASKS -->
+    <section class="view" id="view-tasks">
+      <h2 class="view-title">Tasks</h2>
+      <form class="entry-form" id="task-form">
+        <input type="text" id="t-title" placeholder="What needs doing?" required>
+        <select id="t-category">
+          <option value="General">General</option>
+          <option value="Sports">Sports</option>
+          <option value="School">School</option>
+          <option value="Personal">Personal</option>
+        </select>
+        <input type="date" id="t-due" placeholder="Due">
+        <button type="submit">Add</button>
+      </form>
+      <div class="list" id="task-list"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
