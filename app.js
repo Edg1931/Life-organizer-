@@ -9,7 +9,7 @@
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
     courses: [], finances: [], goals: [], templates: [], foods: [], events: [], decks: [],
-    track: [], analyses: [],
+    track: [], analyses: [], activeWorkout: null,
     settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0, calorieGoal: 2400, matchWeight: null, nextEvent: { name: "", date: "" } },
   };
 
@@ -330,15 +330,25 @@
     finally { btn.disabled = false; }
   });
 
-  // AI workout generator
+  // AI workout generator — returns a structured workout you can log
   document.getElementById("gen-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const req = val("gen-req").trim();
     const out = document.getElementById("gen-out");
-    out.textContent = "Building your workout…";
+    const btn = e.target.querySelector("button");
+    btn.disabled = true;
+    out.innerHTML = `<div class="tutor-loading"><span class="spinner"></span>Building your workout…</div>`;
     try {
-      out.textContent = await aiCall("workout", { request: req, context: { recentWorkouts: data.workouts.slice(-8), recentLifts: data.lifts.slice(-15) } });
+      const json = await aiCallFull("workout", { request: req, context: { recentWorkouts: data.workouts.slice(-8), recentLifts: data.lifts.slice(-15) } });
+      if (json.data && Array.isArray(json.data.exercises)) {
+        out.innerHTML = "";
+        const w = json.data; w.minutes = w.minutes || 45;
+        startWorkout(w);
+      } else {
+        out.textContent = json.text || "Couldn't build a workout — try rephrasing your request.";
+      }
     } catch (err) { out.textContent = aiErrorText(err); }
+    finally { btn.disabled = false; }
   });
 
   // Rest timer
@@ -378,15 +388,188 @@
     });
     save(); render();
   });
+  // Workout actions: start premade / saved / generated workouts, log & manage the active one
   document.querySelector(".content").addEventListener("click", (e) => {
-    const btn = e.target.closest(".tmpl-log");
-    if (!btn) return;
-    const t = data.templates.find((x) => x.id === btn.dataset.id);
-    if (!t) return;
-    t.items.forEach((it) => data.lifts.push({ id: uid(), date: todayISO(), exercise: it.exercise, weight: it.weight, reps: it.reps, sets: it.sets }));
-    save(); render();
-    openModal("Logged ✅", esc(`"${t.name}" added to today's strength log (${t.items.length} exercise${t.items.length === 1 ? "" : "s"}). Adjust the weights if today was heavier or lighter.`));
+    const pm = e.target.closest(".premade-card[data-premade]");
+    if (pm) { startWorkout(cloneWorkout(PREMADE_WORKOUTS[+pm.dataset.premade])); return; }
+    const ts = e.target.closest(".tmpl-start");
+    if (ts) { const t = data.templates.find((x) => x.id === ts.dataset.id); if (t) startWorkout(templateToWorkout(t)); return; }
+    if (e.target.closest("#aw-log")) { logActiveWorkout(); return; }
+    if (e.target.closest("#aw-discard")) { data.activeWorkout = null; save(); renderActiveWorkout(); return; }
+    if (e.target.closest("#aw-save")) { saveActiveAsTemplate(); return; }
   });
+
+  // ---- Ready-made workout library ----
+  const PREMADE_WORKOUTS = [
+    { emoji: "🏋", title: "Full-Body Strength", focus: "Balanced strength", minutes: 50, type: "Strength",
+      warmup: ["5 min easy bike or jog", "Leg swings + arm circles", "2 light warm-up sets of the first lift"],
+      exercises: [
+        { name: "Back Squat", sets: 4, reps: "6", note: "controlled down, drive up" },
+        { name: "Bench Press", sets: 4, reps: "6", note: "" },
+        { name: "Bent-Over Row", sets: 3, reps: "8", note: "squeeze the shoulder blades" },
+        { name: "Romanian Deadlift", sets: 3, reps: "8", note: "feel the hamstrings" },
+        { name: "Overhead Press", sets: 3, reps: "8", note: "" },
+        { name: "Plank", sets: 3, reps: "45s", note: "tight core" },
+      ], cooldown: ["Hip flexor stretch", "Chest + shoulder stretch", "2 min easy walk"] },
+    { emoji: "⚡", title: "Lower-Body Power", focus: "Vault & sprint explosiveness", minutes: 45, type: "Strength",
+      warmup: ["Jump rope 3 min", "Walking lunges", "A-skips + high knees"],
+      exercises: [
+        { name: "Box Jump", sets: 5, reps: "3", note: "land soft, reset each rep" },
+        { name: "Front Squat", sets: 4, reps: "5", note: "fast up" },
+        { name: "Trap-Bar Deadlift", sets: 4, reps: "4", note: "explosive" },
+        { name: "Bulgarian Split Squat", sets: 3, reps: "8", note: "each leg" },
+        { name: "Broad Jump", sets: 4, reps: "3", note: "max distance" },
+        { name: "Calf Raise", sets: 3, reps: "12", note: "" },
+      ], cooldown: ["Quad + calf stretch", "Foam roll legs"] },
+    { emoji: "💪", title: "Upper-Body Push", focus: "Chest, shoulders, triceps", minutes: 40, type: "Strength",
+      warmup: ["Band pull-aparts", "Push-up x10", "Light shoulder press"],
+      exercises: [
+        { name: "Bench Press", sets: 4, reps: "6", note: "" },
+        { name: "Incline Dumbbell Press", sets: 3, reps: "8", note: "" },
+        { name: "Overhead Press", sets: 3, reps: "8", note: "" },
+        { name: "Lateral Raise", sets: 3, reps: "12", note: "light, slow" },
+        { name: "Triceps Pushdown", sets: 3, reps: "12", note: "" },
+      ], cooldown: ["Chest stretch on a wall", "Overhead triceps stretch"] },
+    { emoji: "🔙", title: "Upper-Body Pull", focus: "Back & biceps", minutes: 40, type: "Strength",
+      warmup: ["Band pull-aparts", "Dead hang 20s", "Light rows"],
+      exercises: [
+        { name: "Pull-Up", sets: 4, reps: "6", note: "add weight or use a band" },
+        { name: "Barbell Row", sets: 4, reps: "8", note: "" },
+        { name: "Lat Pulldown", sets: 3, reps: "10", note: "" },
+        { name: "Face Pull", sets: 3, reps: "15", note: "great for shoulders" },
+        { name: "Barbell Curl", sets: 3, reps: "10", note: "" },
+      ], cooldown: ["Lat stretch", "Biceps + forearm stretch"] },
+    { emoji: "🤼", title: "Wrestling Conditioning", focus: "Gas tank & grip", minutes: 30, type: "Conditioning",
+      warmup: ["Jog 3 min", "Sprawls x10", "Shots on air x10"],
+      exercises: [
+        { name: "Kettlebell Swing", sets: 4, reps: "15", note: "explosive hips" },
+        { name: "Burpee", sets: 5, reps: "10", note: "" },
+        { name: "Sled Push or Bear Crawl", sets: 4, reps: "20yd", note: "" },
+        { name: "Farmer Carry", sets: 3, reps: "30s", note: "heavy, grip strength" },
+        { name: "Mountain Climbers", sets: 3, reps: "30s", note: "" },
+      ], cooldown: ["Easy walk 2 min", "Full-body stretch"] },
+    { emoji: "🧘", title: "Core & Mobility", focus: "Core strength + recovery", minutes: 25, type: "Mobility",
+      warmup: ["Cat-cow x10", "World's greatest stretch"],
+      exercises: [
+        { name: "Plank", sets: 3, reps: "45s", note: "" },
+        { name: "Hanging Knee Raise", sets: 3, reps: "12", note: "" },
+        { name: "Russian Twist", sets: 3, reps: "20", note: "" },
+        { name: "Dead Bug", sets: 3, reps: "10", note: "each side" },
+        { name: "Hip Bridge", sets: 3, reps: "15", note: "" },
+      ], cooldown: ["Pigeon stretch", "Child's pose", "Couch stretch"] },
+  ];
+
+  function cloneWorkout(w) { return JSON.parse(JSON.stringify(w)); }
+
+  function templateToWorkout(t) {
+    if (Array.isArray(t.exercises)) return cloneWorkout(t);
+    return {
+      title: t.name, focus: t.focus || "", minutes: t.minutes || 45, type: t.type || "Strength",
+      warmup: t.warmup || [], cooldown: t.cooldown || [],
+      exercises: (t.items || []).map((i) => ({ name: i.exercise, sets: i.sets, reps: String(i.reps), note: "", weight: i.weight })),
+    };
+  }
+
+  function startWorkout(w) {
+    data.activeWorkout = w;
+    save();
+    renderActiveWorkout();
+    const el = document.getElementById("active-workout");
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const firstNum = (s) => { const m = String(s == null ? "" : s).match(/\d+(\.\d+)?/); return m ? m[0] : ""; };
+
+  function renderPremade() {
+    const el = document.getElementById("premade-list");
+    if (!el) return;
+    el.innerHTML = PREMADE_WORKOUTS.map((w, i) => `
+      <button type="button" class="premade-card" data-premade="${i}">
+        <span class="pm-emoji">${w.emoji}</span>
+        <span class="pm-title">${esc(w.title)}</span>
+        <span class="pm-focus">${esc(w.focus)}</span>
+        <span class="pm-meta">${w.exercises.length} exercises · ~${w.minutes} min</span>
+        <span class="pm-go">Start ›</span>
+      </button>`).join("");
+  }
+
+  function renderActiveWorkout() {
+    const el = document.getElementById("active-workout");
+    if (!el) return;
+    const w = data.activeWorkout;
+    if (!w) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false;
+    const warm = (w.warmup || []).map((x) => `<li>${esc(x)}</li>`).join("");
+    const cool = (w.cooldown || []).map((x) => `<li>${esc(x)}</li>`).join("");
+    const rows = (w.exercises || []).map((ex) => {
+      const reps = firstNum(ex.reps) || "";
+      const wt = ex.weight ? ex.weight : "";
+      return `<div class="ex-row">
+        <label class="ex-check"><input type="checkbox" class="ex-done" checked><span class="ex-name">${esc(ex.name)}</span></label>
+        <div class="ex-target">target ${esc(String(ex.sets || ""))} × ${esc(String(ex.reps || ""))}${ex.note ? ` · ${esc(ex.note)}` : ""}</div>
+        <div class="ex-inputs">
+          <input type="number" class="ex-w" min="0" step="0.5" placeholder="lb" value="${wt}">
+          <span class="ex-x">lb</span>
+          <input type="number" class="ex-r" min="0" value="${reps}">
+          <span class="ex-x">reps</span>
+          <input type="number" class="ex-s" min="1" value="${ex.sets || 1}">
+          <span class="ex-x">sets</span>
+        </div>
+      </div>`;
+    }).join("");
+    el.innerHTML = `
+      <div class="aw-head">
+        <div><div class="aw-kicker">▶ Active workout</div><h3 class="aw-title">${esc(w.title || "Workout")}</h3>${w.focus ? `<div class="aw-focus">${esc(w.focus)} · ~${w.minutes || 45} min</div>` : ""}</div>
+        <button type="button" class="aw-discard" id="aw-discard" title="Discard this workout">✕</button>
+      </div>
+      ${warm ? `<details class="aw-section" open><summary>Warm-up</summary><ul class="aw-list">${warm}</ul></details>` : ""}
+      <div class="aw-exercises">${rows || '<p class="hint">No exercises listed.</p>'}</div>
+      ${cool ? `<details class="aw-section"><summary>Cool-down</summary><ul class="aw-list">${cool}</ul></details>` : ""}
+      <div class="aw-actions">
+        <button type="button" class="aw-log-btn" id="aw-log">✓ Log this workout</button>
+        <button type="button" class="btn-ghost" id="aw-save">Save as ready-made</button>
+      </div>
+      <p class="hint">Uncheck anything you skipped and fill in your weights — logging saves the session plus each lift to your strength log below.</p>`;
+  }
+
+  function logActiveWorkout() {
+    const w = data.activeWorkout;
+    if (!w) return;
+    const el = document.getElementById("active-workout");
+    let logged = 0;
+    el.querySelectorAll(".ex-row").forEach((row, i) => {
+      if (!row.querySelector(".ex-done").checked) return;
+      const ex = (w.exercises || [])[i];
+      if (!ex) return;
+      data.lifts.push({
+        id: uid(), date: todayISO(), exercise: ex.name,
+        weight: parseFloat(row.querySelector(".ex-w").value) || 0,
+        reps: parseInt(row.querySelector(".ex-r").value, 10) || 0,
+        sets: parseInt(row.querySelector(".ex-s").value, 10) || 1,
+      });
+      logged++;
+    });
+    data.workouts.push({
+      id: uid(), date: todayISO(), activity: w.title || "Workout",
+      type: w.type || "Strength", intensity: "Moderate", duration: w.minutes || 45, notes: w.focus || "",
+    });
+    data.activeWorkout = null;
+    save(); render();
+    openModal("Workout logged ✅", esc(`Nice work! Saved "${w.title}"${logged ? ` and ${logged} exercise${logged === 1 ? "" : "s"} to your strength log` : ""}. Keep the streak going.`));
+  }
+
+  function saveActiveAsTemplate() {
+    const w = data.activeWorkout;
+    if (!w) return;
+    const name = prompt("Name this ready-made workout:", w.title || "My Workout");
+    if (!name || !name.trim()) return;
+    data.templates.push({
+      id: uid(), name: name.trim(), focus: w.focus || "", minutes: w.minutes || 45, type: w.type || "Strength",
+      warmup: w.warmup || [], cooldown: w.cooldown || [], exercises: cloneWorkout(w.exercises || []),
+    });
+    save(); render();
+    openModal("Saved ✅", esc(`"${name.trim()}" is in your saved workouts. Tap Start anytime to load and log it.`));
+  }
 
   // Settings forms
   document.getElementById("lunch-form").addEventListener("submit", (e) => {
@@ -510,6 +693,7 @@
     renderDecks();
     renderTrack();
     renderAnalyses();
+    renderActiveWorkout();
     fillSettings();
   }
 
@@ -818,14 +1002,16 @@
 
   function renderTemplates() {
     const el = document.getElementById("tmpl-list");
-    el.innerHTML = data.templates.length ? data.templates.map((t) => `
-      <div class="item"><div class="item-body">
+    el.innerHTML = data.templates.length ? data.templates.map((t) => {
+      const list = Array.isArray(t.exercises) ? t.exercises.map((i) => i.name) : (t.items || []).map((i) => i.exercise);
+      return `<div class="item"><div class="item-body">
         <div class="item-title">${esc(t.name)}</div>
-        <div class="item-sub"><span class="badge">${t.items.length} exercise${t.items.length === 1 ? "" : "s"}</span>
-        <span>${esc(t.items.map((i) => i.exercise).slice(0, 4).join(", "))}</span></div></div>
-        <button class="tmpl-log ai-chip" data-id="${t.id}" title="Log this workout today">＋ Log</button>
-        <button class="del" data-kind="templates" data-id="${t.id}">×</button></div>`).join("")
-      : `<div class="empty-state">No templates yet. Log some lifts today, then tap "Save today's lifts".</div>`;
+        <div class="item-sub"><span class="badge">${list.length} exercise${list.length === 1 ? "" : "s"}</span>
+        <span>${esc(list.slice(0, 4).join(", "))}</span></div></div>
+        <button class="tmpl-start ai-chip" data-id="${t.id}" title="Load this workout up top to log it">▶ Start</button>
+        <button class="del" data-kind="templates" data-id="${t.id}">×</button></div>`;
+    }).join("")
+      : `<div class="empty-state">No saved workouts yet. Start a ready-made one above, or log some lifts today and tap "Save today's lifts".</div>`;
   }
 
   const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
@@ -2183,6 +2369,7 @@
   // ---- one-time setup of the dynamic widgets ----
   ["baseball", "wrestling", "track"].forEach(setupVideoAnalyzer);
   ["baseball", "wrestling"].forEach(setupStatImport);
+  renderPremade();
 
   document.body.dataset.view = "dashboard";
   render();

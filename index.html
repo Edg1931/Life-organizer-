@@ -403,6 +403,22 @@
       <section class="view" id="view-health">
         <div class="page-head"><h1>Health &amp; Workout</h1></div>
 
+        <!-- Active workout (shows once you start/generate one) -->
+        <div class="card workout-active" id="active-workout" hidden></div>
+
+        <!-- Build a workout: AI generate + ready-made library -->
+        <div class="card workout-builder">
+          <h3 class="builder-title">Today's workout</h3>
+          <p class="hint">Generate one with AI or tap a ready-made session — then just fill in your weights and log it.</p>
+          <form class="gen-bar" id="gen-form">
+            <input type="text" id="gen-req" placeholder="e.g. 45-min explosive lift for football">
+            <button type="submit">✨ Generate</button>
+          </form>
+          <div id="gen-out" class="ai-output"></div>
+          <h4 class="sub-h">Ready-made workouts</h4>
+          <div id="premade-list" class="premade-grid"></div>
+        </div>
+
         <div class="stats" id="health-stats"></div>
 
         <div class="card">
@@ -496,20 +512,11 @@
 
         <div class="card">
           <div class="brief-head">
-            <h3>Workout templates</h3>
+            <h3>My saved workouts</h3>
             <button id="tmpl-save" class="ai-btn" type="button">Save today's lifts</button>
           </div>
-          <p class="hint">Log a workout's lifts, save the day as a template, then re-log the whole thing next time with one tap.</p>
+          <p class="hint">Save a day's lifts as a workout, then tap <strong>Start</strong> to load it up top, adjust your weights, and log it again.</p>
           <div id="tmpl-list" class="list"></div>
-        </div>
-
-        <div class="card">
-          <h3>Generate a workout</h3>
-          <form class="entry-form" id="gen-form">
-            <input type="text" id="gen-req" placeholder="e.g. 45-min explosive lift for football">
-            <button type="submit">Generate</button>
-          </form>
-          <div id="gen-out" class="ai-output"></div>
         </div>
 
         <div class="card">
