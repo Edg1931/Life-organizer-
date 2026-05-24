@@ -8,7 +8,7 @@
   const blank = {
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], checkins: [],
-    settings: { lunchUrl: "", name: "" },
+    settings: { lunchUrl: "", name: "", aiBase: "" },
   };
 
   function load() {
@@ -170,6 +170,12 @@
     data.settings.name = val("user-name").trim();
     save(); render();
   });
+  document.getElementById("ai-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.settings.aiBase = val("ai-base").trim().replace(/\/$/, "");
+    save();
+    document.getElementById("ai-save-status").textContent = "Saved.";
+  });
 
   // Export / import
   document.getElementById("export-btn").addEventListener("click", () => {
@@ -228,6 +234,7 @@
   function fillSettings() {
     document.getElementById("lunch-url").value = data.settings.lunchUrl || "";
     document.getElementById("user-name").value = data.settings.name || "";
+    document.getElementById("ai-base").value = data.settings.aiBase || "";
   }
 
   function renderDashboard() {
@@ -300,6 +307,7 @@
           <div class="item-sub"><span class="badge ${s.priority}">${s.priority}</span>
           <span class="badge">${esc(s.type || "Assignment")}</span><span>${esc(s.subject)}</span>
           <span class="badge ${r.overdue && !s.done ? "overdue" : ""}">${fmtDate(s.due)} · ${r.text}</span></div></div>
+        <button class="ai-breakdown ai-chip" data-id="${s.id}" title="Break this down with AI">✨</button>
         <button class="del" data-kind="school" data-id="${s.id}">×</button></div>`;
     }).join("") : `<div class="empty-state">No assignments yet. Add one above to stay on top of deadlines.</div>`;
   }
@@ -481,6 +489,109 @@
       el.innerHTML = `<span class="empty">Open the Lunch tab to load today's menu.</span>`;
     }
   }
+
+  // ============ AI COACH ============
+  async function aiCall(kind, payload) {
+    const base = data.settings.aiBase || "";
+    const res = await fetch(`${base}/api/ai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, payload }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `Request failed (${res.status}).`);
+    return json.text || "";
+  }
+
+  function aiErrorText(e) {
+    const msg = (e && e.message) || "Something went wrong.";
+    if (/Failed to fetch|NetworkError|404/i.test(msg)) {
+      return "Couldn't reach the AI backend. If you're on GitHub Pages, deploy the app to Vercel and paste its URL in Settings → AI coach connection. (See the setup steps.)";
+    }
+    return msg;
+  }
+
+  // snapshot helpers for prompts
+  function briefPayload() {
+    const wkStart = mondayOf(new Date());
+    const weekWorkouts = data.workouts.filter((w) => new Date(w.date + "T00:00:00") >= wkStart);
+    return {
+      date: todayISO(),
+      name: data.settings.name || null,
+      school: data.school.filter((s) => !s.done).map((s) => ({ title: s.title, subject: s.subject, type: s.type, due: s.due, priority: s.priority })),
+      workoutsThisWeek: weekWorkouts.length,
+      minutesThisWeek: weekWorkouts.reduce((s, w) => s + (w.duration || 0), 0),
+      workoutStreak: workoutStreak(),
+      openTasks: data.tasks.filter((t) => !t.done).map((t) => ({ title: t.title, category: t.category, due: t.due })),
+      lunchToday: lunchCache.date === todayISO() ? lunchCache.dishes : null,
+    };
+  }
+  function insightsPayload() {
+    return {
+      recentWorkouts: data.workouts.slice(-14),
+      checkins: data.checkins.slice(-14),
+      wrestling: data.wrestling.slice(-10),
+      baseball: data.baseball.slice(-10),
+      openSchool: data.school.filter((s) => !s.done),
+    };
+  }
+
+  // Modal
+  const modal = document.getElementById("modal");
+  function openModal(title, html) {
+    document.getElementById("modal-title").textContent = title;
+    document.getElementById("modal-content").innerHTML = html;
+    modal.hidden = false;
+  }
+  function closeModal() { modal.hidden = true; }
+  document.getElementById("modal-close").addEventListener("click", closeModal);
+  document.getElementById("modal-backdrop").addEventListener("click", closeModal);
+
+  // Daily AI brief
+  document.getElementById("brief-ai").addEventListener("click", async () => {
+    const el = document.getElementById("brief-text");
+    const btn = document.getElementById("brief-ai");
+    btn.disabled = true;
+    const original = el.textContent;
+    el.textContent = "Thinking…";
+    try {
+      el.textContent = await aiCall("brief", briefPayload());
+    } catch (e) {
+      el.textContent = original;
+      openModal("AI brief", esc(aiErrorText(e)));
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Ask the coach
+  document.getElementById("coach-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = val("coach-q").trim();
+    if (!q) return;
+    const out = document.getElementById("coach-answer");
+    out.textContent = "Thinking…";
+    try {
+      out.textContent = await aiCall("coach", { question: q, context: briefPayload() });
+    } catch (err) {
+      out.textContent = aiErrorText(err);
+    }
+  });
+
+  // Break down a school item (delegated)
+  document.querySelector(".content").addEventListener("click", async (e) => {
+    const btn = e.target.closest(".ai-breakdown");
+    if (!btn) return;
+    const item = data.school.find((s) => s.id === btn.dataset.id);
+    if (!item) return;
+    openModal(item.title, "Thinking…");
+    try {
+      const text = await aiCall("breakdown", { title: item.title, subject: item.subject, type: item.type, due: item.due });
+      openModal(item.title, esc(text));
+    } catch (err) {
+      openModal(item.title, esc(aiErrorText(err)));
+    }
+  });
 
   render();
   // Try to warm the lunch cache in the background so the dashboard can show it.

@@ -39,9 +39,20 @@
         </div>
 
         <div class="brief card glow">
-          <h3>Your daily brief</h3>
+          <div class="brief-head">
+            <h3>Your daily brief</h3>
+            <button id="brief-ai" class="ai-btn" type="button">✨ AI brief</button>
+          </div>
           <p id="brief-text" class="brief-text"></p>
-          <p class="brief-note">AI-generated briefs unlock when we connect the backend — this version is built from your data.</p>
+        </div>
+
+        <div class="card">
+          <h3>Ask your coach</h3>
+          <form id="coach-form" class="entry-form stacked">
+            <input type="text" id="coach-q" placeholder="e.g. I have 2 meets and a bio test this week — how do I plan it?">
+            <button type="submit">Ask</button>
+          </form>
+          <div id="coach-answer" class="ai-output"></div>
         </div>
 
         <div class="stats" id="stats"></div>
@@ -270,6 +281,15 @@
           <p id="lunch-save-status" class="hint"></p>
         </div>
         <div class="card">
+          <h3>AI coach connection</h3>
+          <p class="hint">Where your AI backend lives. Leave blank if the hub is hosted on the same site as the AI (e.g. on Vercel). If you open the hub from GitHub Pages, paste your Vercel app URL here (e.g. <code>https://life-hub.vercel.app</code>).</p>
+          <form class="entry-form stacked" id="ai-form">
+            <input type="url" id="ai-base" placeholder="https://your-app.vercel.app (or leave blank)">
+            <button type="submit">Save</button>
+          </form>
+          <p id="ai-save-status" class="hint"></p>
+        </div>
+        <div class="card">
           <h3>Your name</h3>
           <form class="entry-form stacked" id="name-form">
             <input type="text" id="user-name" placeholder="First name (for your dashboard greeting)">
@@ -289,6 +309,17 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title">AI</h3>
+        <button id="modal-close" class="modal-close" type="button">×</button>
+      </div>
+      <div id="modal-content" class="ai-output"></div>
+    </div>
   </div>
 
   <script src="app.js"></script>

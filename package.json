@@ -1,0 +1,10 @@
+{
+  "name": "life-hub",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal hub for school, sports, health, and workouts, with an AI coach.",
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest"
+  }
+}
