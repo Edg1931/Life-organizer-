@@ -126,6 +126,7 @@ body[data-view="lunch"]   { --section: #22d3ee; }
 body[data-view="tasks"]   { --section: #a855f7; }
 body[data-view="grades"]  { --section: #818cf8; }
 body[data-view="money"]   { --section: #2dd4bf; }
+body[data-view="nutrition"] { --section: #fb923c; }
 
 /* CARDS */
 .card {
@@ -328,6 +329,11 @@ body[data-view="money"]   { --section: #2dd4bf; }
 .lift-pick:focus { outline: none; border-color: var(--accent); }
 .vid-link { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--accent); text-decoration: none; }
 .vid-link:hover { text-decoration: underline; }
+
+/* NUTRITION */
+.cal-head { margin-bottom: 10px; }
+.cal-head .hint { margin: 0; font-size: 14px; color: var(--text); font-weight: 600; }
+#view-nutrition .goal-bar { margin-bottom: 16px; }
 
 /* REST TIMER */
 .rest-timer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }

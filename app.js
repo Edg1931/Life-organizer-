@@ -8,8 +8,8 @@
   const blank = {
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
-    courses: [], finances: [], goals: [], templates: [],
-    settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0 },
+    courses: [], finances: [], goals: [], templates: [], foods: [],
+    settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0, calorieGoal: 2400, matchWeight: null },
   };
 
   function load() {
@@ -220,6 +220,18 @@
     save(); goalForm.reset(); render();
   });
 
+  // Nutrition — food log
+  const foodForm = document.getElementById("food-form");
+  document.getElementById("f-date").value = todayISO();
+  foodForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.foods.push({
+      id: uid(), date: val("f-date"), name: val("f-name").trim(),
+      cal: int("f-cal"), meal: val("f-meal"),
+    });
+    save(); foodForm.reset(); document.getElementById("f-date").value = todayISO(); render();
+  });
+
   // Strength / lifts
   const lfForm = document.getElementById("lift-form");
   document.getElementById("lf-date").value = todayISO();
@@ -335,6 +347,13 @@
     data.settings.eligGpa = g == null ? 2.0 : g;
     save(); render();
   });
+  document.getElementById("nutrition-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const goal = int("cal-goal");
+    data.settings.calorieGoal = goal || 2400;
+    data.settings.matchWeight = num("match-weight");
+    save(); render();
+  });
 
   // Export / import
   document.getElementById("export-btn").addEventListener("click", () => {
@@ -391,6 +410,7 @@
     renderLifts();
     renderGrades();
     renderMoney();
+    renderNutrition();
     renderTasks();
     fillSettings();
   }
@@ -400,6 +420,8 @@
     document.getElementById("user-name").value = data.settings.name || "";
     document.getElementById("ai-base").value = data.settings.aiBase || "";
     document.getElementById("elig-gpa").value = data.settings.eligGpa != null ? data.settings.eligGpa : 2.0;
+    document.getElementById("cal-goal").value = data.settings.calorieGoal || 2400;
+    document.getElementById("match-weight").value = data.settings.matchWeight != null ? data.settings.matchWeight : "";
   }
 
   function renderDashboard() {
@@ -831,6 +853,69 @@
     if (isNaN(amt)) return;
     g.saved = Math.max(0, (g.saved || 0) + amt);
     save(); render();
+  });
+
+  // ============ NUTRITION ============
+  const pointsFor = (cal) => Math.max(0, Math.round(cal / 50));
+
+  function nutritionToday() {
+    const today = todayISO();
+    const foods = data.foods.filter((f) => f.date === today);
+    const consumed = foods.reduce((s, f) => s + (f.cal || 0), 0);
+    const goal = data.settings.calorieGoal || 2400;
+    const latestWeight = [...data.checkins].sort((a, b) => b.date.localeCompare(a.date)).find((c) => c.weight != null);
+    return { foods, consumed, goal, remaining: goal - consumed, weight: latestWeight ? latestWeight.weight : null };
+  }
+
+  function renderNutrition() {
+    const n = nutritionToday();
+    const pctEl = Math.min(100, n.goal ? Math.round((n.consumed / n.goal) * 100) : 0);
+    const target = data.settings.matchWeight;
+    const weightLabel = n.weight != null
+      ? (target != null ? `${trimNum(n.weight)} → ${trimNum(target)}` : trimNum(n.weight))
+      : "–";
+
+    document.getElementById("nutri-stats").innerHTML =
+      statCard(n.consumed + "<small> cal</small>", "Eaten today") +
+      statCard((n.remaining < 0 ? "−" : "") + Math.abs(n.remaining) + "<small> cal</small>", n.remaining < 0 ? "Over budget" : "Remaining") +
+      statCard(`${pointsFor(n.consumed)}<small>/${pointsFor(n.goal)}</small>`, "Points used") +
+      statCard(weightLabel, target != null ? "Weight → target" : "Latest weight");
+
+    document.getElementById("cal-summary").textContent =
+      `${n.consumed} of ${n.goal} cal today · ${n.remaining >= 0 ? n.remaining + " left" : Math.abs(n.remaining) + " over"}`;
+    const fill = document.getElementById("cal-fill");
+    fill.style.width = pctEl + "%";
+    fill.style.background = n.remaining < 0
+      ? "linear-gradient(90deg,#fb7185,#f43f5e)"
+      : "linear-gradient(90deg,#fb923c,#fbbf24)";
+
+    const el = document.getElementById("food-list");
+    const items = [...data.foods].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 40);
+    el.innerHTML = items.length ? items.map((f) => `
+      <div class="item"><div class="item-body">
+        <div class="item-title">${esc(f.name)}</div>
+        <div class="item-sub"><span class="badge">${esc(f.meal || "Snack")}</span>
+        <span>${f.cal} cal</span><span>${pointsFor(f.cal)} pts</span><span>${fmtDate(f.date)}</span></div></div>
+        <button class="del" data-kind="foods" data-id="${f.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No foods logged yet. Track what you eat to manage your weight.</div>`;
+  }
+
+  document.getElementById("nutri-ai").addEventListener("click", async () => {
+    const out = document.getElementById("nutri-out");
+    const btn = document.getElementById("nutri-ai");
+    const n = nutritionToday();
+    btn.disabled = true; out.textContent = "Thinking…";
+    try {
+      out.textContent = await aiCall("nutrition", {
+        intent: data.settings.matchWeight != null ? "maintain weight toward their match target while fueling for training" : "fuel well and maintain weight",
+        context: {
+          remainingCalories: n.remaining, calorieGoal: n.goal, eatenToday: n.consumed,
+          currentWeight: n.weight, targetWeight: data.settings.matchWeight,
+          foodsToday: n.foods.map((f) => ({ name: f.name, cal: f.cal, meal: f.meal })),
+        },
+      });
+    } catch (err) { out.textContent = aiErrorText(err); }
+    finally { btn.disabled = false; }
   });
 
   // ============ GRADES ============

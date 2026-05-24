@@ -31,6 +31,8 @@ function buildPrompt(kind, payload) {
       return `The student asked their coach:\n"${(p.question || "").slice(0, 800)}"\n\nHere is relevant context from their hub:\n${JSON.stringify(p.context || {}, null, 2)}\n\nAnswer helpfully and specifically, using the context where relevant.`;
     case "workout":
       return `The student wants a workout. Their request: "${(p.request || "a balanced 45-minute session").slice(0, 300)}".\n\nRecent training context:\n${JSON.stringify(p.context || {}, null, 2)}\n\nDesign one specific session: a short warm-up, the main work as exercises with sets × reps and rough intensity, and a quick cooldown. Keep it realistic for a high-school athlete with normal gym access. Plain text, simple "- " bullets, no markdown headers.`;
+    case "nutrition":
+      return `The student is a high-school athlete (wrestler) fueling for performance. Today's snapshot:\n${JSON.stringify(p.context || {}, null, 2)}\n\nGoal: ${(p.intent || "maintain their weight and fuel well").slice(0, 200)}.\n\nSuggest 3-5 specific, realistic snacks/meals with rough calorie estimates that fit their remaining calories for the day, favoring nutrient-dense, performance-supporting foods (protein + smart carbs + hydration).\n\nSAFETY — this is non-negotiable: promote healthy fueling and hydration. NEVER recommend skipping meals, severe restriction, dehydration, sweating out water weight, or any rapid weight-cut tactic. If the goal seems to involve unsafe rapid cutting, briefly and kindly steer them to talk with their coach, athletic trainer, or doctor instead. Plain text, simple "- " bullets.`;
     default:
       return null;
   }
