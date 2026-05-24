@@ -464,6 +464,34 @@
   // ============ RENDERERS ============
   function statCard(num, label) { return `<div class="stat-card"><div class="stat-num">${num}</div><div class="stat-label">${label}</div></div>`; }
 
+  // Reusable bar chart matching the app's existing .chart / .bar styling.
+  // points: [{ value:number, display:string, label:string, title?:string }]
+  function barChart(points, opts = {}) {
+    if (!points.length) return "";
+    const top = Math.max(opts.minTop || 0, ...points.map((p) => p.value)) || 1;
+    const base = opts.baseline || 0;
+    const denom = (top - base) || 1;
+    return points.map((p) => `
+      <div class="bar-wrap" title="${esc(p.title || `${p.display} · ${p.label}`)}">
+        <span class="bar-val">${esc(p.display)}</span>
+        <div class="bar" style="height:${Math.max(4, Math.round(((p.value - base) / denom) * 100))}%"></div>
+        <span class="bar-label">${esc(p.label)}</span>
+      </div>`).join("");
+  }
+
+  // Parse a pole-vault mark into inches: 12'6", 12'6, 3.65m, or a plain number.
+  function parseHeight(s) {
+    if (!s) return null;
+    const str = String(s).trim().toLowerCase();
+    let m = str.match(/(\d+)\s*'\s*(\d+(?:\.\d+)?)?/);
+    if (m) return (+m[1]) * 12 + (m[2] ? +m[2] : 0);
+    m = str.match(/(\d+(?:\.\d+)?)\s*m\b/);
+    if (m) return +m[1] * 39.3701;
+    m = str.match(/(\d+(?:\.\d+)?)/);
+    if (m) { const v = +m[1]; return v < 20 ? v * 12 : v; }
+    return null;
+  }
+
   function render() {
     renderCalendar();
     renderDashboard();
@@ -897,6 +925,18 @@
       statCard(`${wins}<small>-${losses}</small>`, "Record") +
       statCard(items.length ? Math.round((wins / items.length) * 100) + "<small>%</small>" : "–", "Win rate") +
       statCard(pins, "Pins");
+
+    const wrBlock = document.getElementById("wr-chart-block");
+    const wrAsc = [...data.wrestling].sort((a, b) => a.date.localeCompare(b.date));
+    if (wrBlock) {
+      if (wrAsc.length >= 2) {
+        let w = 0;
+        const pts = wrAsc.map((m, i) => { if (m.result === "Win") w++; return { date: m.date, pct: Math.round((w / (i + 1)) * 100) }; })
+          .slice(-12).map((p) => ({ value: p.pct, display: p.pct + "%", label: p.date.slice(5).replace("-", "/"), title: `${p.pct}% win rate through ${fmtDate(p.date)}` }));
+        document.getElementById("wr-chart").innerHTML = barChart(pts, { minTop: 100 });
+        wrBlock.hidden = false;
+      } else { wrBlock.hidden = true; }
+    }
     const el = document.getElementById("wrestling-list");
     el.innerHTML = items.length ? items.map((m) => `
       <div class="item ${m.result.toLowerCase()}"><div class="item-body">
@@ -919,6 +959,18 @@
       statCard(ab ? obp.toFixed(3).replace(/^0/, "") : "–", "On-base %") +
       statCard(h, "Hits") +
       statCard(sum("rbi"), "RBI");
+
+    const bbBlock = document.getElementById("bb-chart-block");
+    const asc = [...data.baseball].sort((a, b) => a.date.localeCompare(b.date));
+    if (bbBlock) {
+      if (asc.length >= 2) {
+        let cAB = 0, cH = 0;
+        const pts = asc.map((g) => { cAB += g.ab || 0; cH += g.h || 0; return { date: g.date, avg: cAB ? cH / cAB : 0 }; })
+          .slice(-12).map((p) => ({ value: p.avg, display: p.avg ? p.avg.toFixed(3).replace(/^0/, "") : "–", label: p.date.slice(5).replace("-", "/"), title: `${p.avg.toFixed(3)} avg through ${fmtDate(p.date)}` }));
+        document.getElementById("bb-chart").innerHTML = barChart(pts);
+        bbBlock.hidden = false;
+      } else { bbBlock.hidden = true; }
+    }
     const el = document.getElementById("baseball-list");
     el.innerHTML = items.length ? items.map((g) => `
       <div class="item"><div class="item-body">
@@ -1712,6 +1764,20 @@
       statCard(items.length, "Entries") +
       statCard(new Set(items.map((t) => t.meet)).size, "Meets") +
       statCard(pv.length, "Pole vault marks");
+
+    const pvBlock = document.getElementById("track-chart-block");
+    if (pvBlock) {
+      const heights = [...data.track]
+        .filter((t) => /vault|\bpv\b/i.test(t.event || "") && parseHeight(t.mark) != null)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      if (heights.length >= 2) {
+        const inches = heights.map((t) => parseHeight(t.mark));
+        const base = Math.max(0, Math.floor(Math.min(...inches) - 6));
+        const pts = heights.slice(-12).map((t) => ({ value: parseHeight(t.mark), display: t.mark, label: t.date.slice(5).replace("-", "/"), title: `${t.mark} at ${t.meet}` }));
+        document.getElementById("track-chart").innerHTML = barChart(pts, { baseline: base });
+        pvBlock.hidden = false;
+      } else { pvBlock.hidden = true; }
+    }
     list.innerHTML = items.length ? items.map((t) => `
       <div class="item"><div class="item-body">
         <div class="item-title">${esc(t.meet)}${t.event ? ` · ${esc(t.event)}` : ""}</div>
@@ -1756,13 +1822,23 @@
       <div id="${prefix}-saved" class="va-saved"></div>`;
   }
 
-  function seekVideo(video, t) {
+  // Wait until a specific time is seeked AND the frame is actually painted.
+  // iOS Safari fires "seeked" before the new frame is ready, so we also use
+  // requestVideoFrameCallback when available, and always have a timeout.
+  function seekAndPaint(video, t) {
     return new Promise((resolve) => {
       let done = false;
-      const finish = () => { if (done) return; done = true; video.removeEventListener("seeked", finish); resolve(); };
-      video.addEventListener("seeked", finish);
-      try { video.currentTime = Math.min(t, Math.max(0, (video.duration || 0) - 0.05)); } catch { finish(); }
-      setTimeout(finish, 3000); // some browsers don't reliably fire "seeked"
+      const finish = () => { if (done) return; done = true; video.removeEventListener("seeked", onSeeked); resolve(); };
+      const onSeeked = () => {
+        if (typeof video.requestVideoFrameCallback === "function") {
+          try { video.requestVideoFrameCallback(() => finish()); return; } catch { /* fall through */ }
+        }
+        // give the compositor a beat to paint the seeked frame
+        setTimeout(finish, 60);
+      };
+      video.addEventListener("seeked", onSeeked);
+      try { video.currentTime = t; } catch { finish(); }
+      setTimeout(finish, 3000);
     });
   }
 
@@ -1770,10 +1846,22 @@
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const video = document.createElement("video");
-      video.preload = "auto"; video.muted = true; video.playsInline = true; video.src = url;
-      const fail = (msg) => { URL.revokeObjectURL(url); reject(new Error(msg)); };
+      video.muted = true; video.defaultMuted = true; video.playsInline = true; video.preload = "auto";
+      video.setAttribute("muted", ""); video.setAttribute("playsinline", ""); video.setAttribute("webkit-playsinline", "");
+      // iOS won't decode/paint frames from a detached <video>; attach it off-screen.
+      video.style.cssText = "position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0.01;pointer-events:none;";
+      document.body.appendChild(video);
+
+      let settled = false, started = false;
+      const cleanup = () => { try { video.pause(); } catch {} URL.revokeObjectURL(url); video.remove(); };
+      const fail = (msg) => { if (settled) return; settled = true; cleanup(); reject(new Error(msg)); };
+      const finishOk = (frames) => { if (settled) return; settled = true; cleanup(); resolve(frames); };
+
       video.addEventListener("error", () => fail("Couldn't read that video file."), { once: true });
-      video.addEventListener("loadedmetadata", async () => {
+
+      const grab = async () => {
+        if (started || settled) return;
+        started = true;
         const dur = video.duration;
         if (!dur || !isFinite(dur) || !video.videoWidth) { fail("Couldn't read that video file."); return; }
         const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
@@ -1781,17 +1869,23 @@
         canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
         canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
         const ctx = canvas.getContext("2d");
+        // Prime the decoder — iOS needs a play() before it will paint seeked frames.
+        try { await video.play(); video.pause(); } catch { /* not fatal */ }
         const frames = [];
         try {
           for (let i = 0; i < count; i++) {
-            await seekVideo(video, dur * ((i + 0.5) / count));
+            await seekAndPaint(video, Math.min(dur * ((i + 0.5) / count), Math.max(0, dur - 0.05)));
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             frames.push(canvas.toDataURL("image/jpeg", 0.8));
           }
         } catch { fail("Couldn't read frames from that video."); return; }
-        URL.revokeObjectURL(url);
-        resolve(frames);
-      }, { once: true });
+        finishOk(frames);
+      };
+
+      video.addEventListener("loadeddata", grab, { once: true });
+      // Fallback in case events are flaky (some mobile browsers).
+      setTimeout(() => { if (!started && !settled && video.readyState >= 2) grab(); }, 1800);
+      video.src = url;
     });
   }
 

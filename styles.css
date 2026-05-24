@@ -604,6 +604,12 @@ body[data-view="calendar"] { --section: #38bdf8; }
 .si-num { flex: 0 0 58px; text-align: center; padding-left: 6px; padding-right: 6px; }
 #si-baseball-result .sched-row, #si-wrestling-result .sched-row { gap: 7px; }
 
+/* ===== PROGRESS CHARTS ===== */
+.chart-block { margin: 18px 0 6px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.chart-block[hidden] { display: none; }
+.chart-title { font-family: "Space Grotesk", sans-serif; font-size: 14px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.chart-card[hidden] { display: none; }
+
 /* ===== VIDEO ANALYZER ===== */
 .video-analyzer { margin-top: 18px; }
 .va-disc { display: inline-flex; gap: 6px; margin-bottom: 14px; background: var(--surface-2); padding: 4px; border-radius: 12px; border: 1px solid var(--border); }
