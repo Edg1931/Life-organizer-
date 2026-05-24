@@ -1,286 +1,488 @@
-// Life Organizer — local-first tracker for workouts, school, and tasks.
+// Life Hub — local-first personal hub for school, sports, health, and tasks.
 (function () {
   "use strict";
 
-  const STORE_KEY = "life-organizer-v1";
+  const KEY = "life-hub-v2";
+  const LEGACY_KEY = "life-organizer-v1";
 
-  const defaultData = { workouts: [], school: [], tasks: [] };
+  const blank = {
+    workouts: [], school: [], tasks: [],
+    wrestling: [], baseball: [], checkins: [],
+    settings: { lunchUrl: "", name: "" },
+  };
 
   function load() {
     try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return structuredClone(defaultData);
-      const parsed = JSON.parse(raw);
-      return {
-        workouts: parsed.workouts || [],
-        school: parsed.school || [],
-        tasks: parsed.tasks || [],
-      };
-    } catch (e) {
-      return structuredClone(defaultData);
-    }
+      const raw = localStorage.getItem(KEY);
+      if (raw) return Object.assign(structuredClone(blank), JSON.parse(raw));
+      // migrate from the original organizer
+      const legacy = localStorage.getItem(LEGACY_KEY);
+      if (legacy) {
+        const old = JSON.parse(legacy);
+        const d = structuredClone(blank);
+        d.workouts = (old.workouts || []).map((w) => ({ intensity: "Moderate", ...w }));
+        d.school = old.school || [];
+        d.tasks = old.tasks || [];
+        return d;
+      }
+    } catch (e) { /* fall through */ }
+    return structuredClone(blank);
   }
 
   let data = load();
-
-  function save() {
-    localStorage.setItem(STORE_KEY, JSON.stringify(data));
-  }
-
+  const save = () => localStorage.setItem(KEY, JSON.stringify(data));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-  // --- Date helpers ---
-  function todayISO() {
-    const d = new Date();
-    return d.toISOString().slice(0, 10);
-  }
+  // --- date helpers ---
+  const todayISO = () => new Date().toISOString().slice(0, 10);
   function fmtDate(iso) {
     if (!iso) return "";
-    const d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
   function daysUntil(iso) {
-    const due = new Date(iso + "T00:00:00");
-    const now = new Date(todayISO() + "T00:00:00");
-    return Math.round((due - now) / 86400000);
+    return Math.round((new Date(iso + "T00:00:00") - new Date(todayISO() + "T00:00:00")) / 86400000);
   }
-  function relativeDue(iso) {
+  function relDue(iso) {
     const d = daysUntil(iso);
     if (d < 0) return { text: `${Math.abs(d)}d overdue`, overdue: true };
     if (d === 0) return { text: "Today", overdue: false };
     if (d === 1) return { text: "Tomorrow", overdue: false };
     return { text: `in ${d}d`, overdue: false };
   }
-  function startOfWeek() {
-    const d = new Date(todayISO() + "T00:00:00");
-    const day = d.getDay(); // 0 = Sun
-    const diff = (day === 0 ? -6 : 1) - day; // Monday start
-    d.setDate(d.getDate() + diff);
+  function mondayOf(date) {
+    const d = new Date(date); d.setHours(0, 0, 0, 0);
+    const day = d.getDay();
+    d.setDate(d.getDate() + ((day === 0 ? -6 : 1) - day));
     return d;
   }
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  // --- Tab navigation ---
-  document.getElementById("tabs").addEventListener("click", (e) => {
-    const btn = e.target.closest(".tab");
+  // --- navigation ---
+  document.getElementById("nav").addEventListener("click", (e) => {
+    const btn = e.target.closest(".nav-item");
     if (!btn) return;
-    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    showView(btn.dataset.view);
+  });
+  document.querySelector(".nav-settings").addEventListener("click", () => showView("settings"));
+
+  function showView(view) {
+    document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+    const el = document.getElementById("view-" + view);
+    if (el) el.classList.add("active");
+    if (view === "lunch") loadLunch();
+  }
+
+  // sub-tabs (sports)
+  document.getElementById("sports-subtabs").addEventListener("click", (e) => {
+    const btn = e.target.closest(".subtab");
+    if (!btn) return;
+    document.querySelectorAll(".subtab").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".subview").forEach((v) => v.classList.remove("active"));
     btn.classList.add("active");
-    document.getElementById("view-" + btn.dataset.view).classList.add("active");
+    document.getElementById("sub-" + btn.dataset.sub).classList.add("active");
   });
 
-  // --- Workouts ---
-  const workoutForm = document.getElementById("workout-form");
+  // ============ FORMS ============
+  // Workouts
+  const wForm = document.getElementById("workout-form");
   document.getElementById("w-date").value = todayISO();
-  workoutForm.addEventListener("submit", (e) => {
+  wForm.addEventListener("submit", (e) => {
     e.preventDefault();
     data.workouts.push({
       id: uid(),
-      activity: document.getElementById("w-activity").value.trim(),
-      type: document.getElementById("w-type").value,
-      duration: parseInt(document.getElementById("w-duration").value, 10) || 0,
-      date: document.getElementById("w-date").value,
-      notes: document.getElementById("w-notes").value.trim(),
+      activity: val("w-activity"), type: val("w-type"), intensity: val("w-intensity"),
+      duration: int("w-duration"), date: val("w-date"), notes: val("w-notes"),
     });
-    save();
-    workoutForm.reset();
-    document.getElementById("w-date").value = todayISO();
-    render();
+    save(); wForm.reset(); document.getElementById("w-date").value = todayISO(); render();
   });
+
+  // Daily check-in
+  const cForm = document.getElementById("checkin-form");
+  document.getElementById("h-date").value = todayISO();
+  cForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const date = val("h-date");
+    const entry = {
+      id: uid(), date,
+      sleep: num("h-sleep"), weight: num("h-weight"), water: num("h-water"),
+      mood: val("h-mood") ? int("h-mood") : null,
+    };
+    // one check-in per day: replace if exists
+    data.checkins = data.checkins.filter((c) => c.date !== date);
+    data.checkins.push(entry);
+    save(); cForm.reset(); document.getElementById("h-date").value = todayISO(); render();
+  });
+
+  // School
+  const sForm = document.getElementById("school-form");
+  document.getElementById("s-due").value = todayISO();
+  sForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.school.push({
+      id: uid(), title: val("s-title"), subject: val("s-subject"),
+      type: val("s-type"), priority: val("s-priority"), due: val("s-due"), done: false,
+    });
+    save(); sForm.reset(); document.getElementById("s-due").value = todayISO(); render();
+  });
+
+  // Tasks
+  const tForm = document.getElementById("task-form");
+  tForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.tasks.push({ id: uid(), title: val("t-title"), category: val("t-category"), due: val("t-due"), done: false });
+    save(); tForm.reset(); render();
+  });
+
+  // Wrestling
+  const wrForm = document.getElementById("wrestling-form");
+  document.getElementById("wr-date").value = todayISO();
+  wrForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.wrestling.push({
+      id: uid(), opponent: val("wr-opponent"), event: val("wr-event"), date: val("wr-date"),
+      result: val("wr-result"), method: val("wr-method"), score: val("wr-score"), notes: val("wr-notes"),
+    });
+    save(); wrForm.reset(); document.getElementById("wr-date").value = todayISO(); render();
+  });
+
+  // Baseball
+  const bbForm = document.getElementById("baseball-form");
+  document.getElementById("bb-date").value = todayISO();
+  bbForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.baseball.push({
+      id: uid(), date: val("bb-date"), opponent: val("bb-opponent"),
+      ab: int("bb-ab"), h: int("bb-h"), rbi: int("bb-rbi"), r: int("bb-r"), bb: int("bb-bb"), k: int("bb-k"),
+    });
+    save(); bbForm.reset(); document.getElementById("bb-date").value = todayISO(); render();
+  });
+
+  // Settings forms
+  document.getElementById("lunch-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.settings.lunchUrl = val("lunch-url").trim();
+    save();
+    document.getElementById("lunch-save-status").textContent = data.settings.lunchUrl ? "Saved. Open the Lunch tab to see today's menu." : "Cleared.";
+  });
+  document.getElementById("name-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.settings.name = val("user-name").trim();
+    save(); render();
+  });
+
+  // Export / import
+  document.getElementById("export-btn").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `life-hub-backup-${todayISO()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  document.getElementById("import-file").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        data = Object.assign(structuredClone(blank), JSON.parse(reader.result));
+        save(); render(); alert("Data imported.");
+      } catch { alert("That file could not be read."); }
+    };
+    reader.readAsText(file);
+  });
+
+  // shared toggle / delete
+  document.querySelector(".content").addEventListener("click", (e) => {
+    const del = e.target.closest(".del");
+    if (del) { data[del.dataset.kind] = data[del.dataset.kind].filter((x) => x.id !== del.dataset.id); save(); render(); }
+  });
+  document.querySelector(".content").addEventListener("change", (e) => {
+    const chk = e.target.closest(".check");
+    if (chk) {
+      const item = data[chk.dataset.kind].find((x) => x.id === chk.dataset.id);
+      if (item) { item.done = chk.checked; save(); render(); }
+    }
+  });
+
+  // input getters
+  function val(id) { return document.getElementById(id).value; }
+  function int(id) { return parseInt(document.getElementById(id).value, 10) || 0; }
+  function num(id) { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; }
+
+  // ============ RENDERERS ============
+  function statCard(num, label) { return `<div class="stat-card"><div class="stat-num">${num}</div><div class="stat-label">${label}</div></div>`; }
+
+  function render() {
+    renderDashboard();
+    renderSchool();
+    renderWorkouts();
+    renderHealth();
+    renderWrestling();
+    renderBaseball();
+    renderTasks();
+    fillSettings();
+  }
+
+  function fillSettings() {
+    document.getElementById("lunch-url").value = data.settings.lunchUrl || "";
+    document.getElementById("user-name").value = data.settings.name || "";
+  }
+
+  function renderDashboard() {
+    const now = new Date();
+    document.getElementById("dash-date").textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+    const hr = now.getHours();
+    const greet = hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
+    document.getElementById("dash-greeting").textContent = data.settings.name ? `${greet}, ${data.settings.name}` : greet;
+
+    const wkStart = mondayOf(now);
+    const weekWorkouts = data.workouts.filter((w) => new Date(w.date + "T00:00:00") >= wkStart);
+    const weekMin = weekWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
+    const openSchool = data.school.filter((s) => !s.done);
+    const openTasks = data.tasks.filter((t) => !t.done);
+    const overdue = openSchool.filter((s) => daysUntil(s.due) < 0).length;
+
+    document.getElementById("stats").innerHTML =
+      statCard(weekWorkouts.length, "Workouts this week") +
+      statCard(weekMin + "<small> min</small>", "Active minutes") +
+      statCard(openSchool.length, "School to-dos") +
+      statCard(workoutStreak() + "<small> d</small>", "Workout streak");
+
+    // brief
+    const bits = [];
+    const dueToday = openSchool.filter((s) => daysUntil(s.due) === 0);
+    if (dueToday.length) bits.push(`${dueToday.length} school item${dueToday.length > 1 ? "s" : ""} due today (${dueToday.map((s) => s.title).slice(0,2).join(", ")}).`);
+    if (overdue) bits.push(`${overdue} assignment${overdue > 1 ? "s are" : " is"} overdue — knock those out first.`);
+    const nextDue = [...openSchool].sort((a, b) => a.due.localeCompare(b.due))[0];
+    if (!dueToday.length && nextDue) bits.push(`Next up: "${nextDue.title}" ${relDue(nextDue.due).text}.`);
+    if (weekWorkouts.length === 0) bits.push("No training logged this week yet — get a session in.");
+    else bits.push(`You've trained ${weekWorkouts.length}× this week (${weekMin} min). Nice work.`);
+    if (openTasks.length) bits.push(`${openTasks.length} open task${openTasks.length > 1 ? "s" : ""} on your list.`);
+    document.getElementById("brief-text").textContent = bits.join(" ");
+
+    fillMini("dash-school", [...openSchool].sort((a, b) => a.due.localeCompare(b.due)).slice(0, 5),
+      (s) => ({ left: s.title, right: relDue(s.due).text }), "Nothing due — you're clear.");
+    fillMini("dash-workouts", [...weekWorkouts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5),
+      (w) => ({ left: w.activity, right: `${w.duration}m · ${fmtDate(w.date)}` }), "No workouts this week yet.");
+    fillMini("dash-tasks", [...openTasks].sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999")).slice(0, 5),
+      (t) => ({ left: t.title, right: t.due ? relDue(t.due).text : t.category }), "All clear!");
+
+    renderDashLunch();
+  }
+
+  function fillMini(id, items, map, emptyMsg) {
+    const el = document.getElementById(id);
+    el.innerHTML = items.length
+      ? items.map((it) => { const m = map(it); return `<li><span>${esc(m.left)}</span><span class="meta">${esc(m.right)}</span></li>`; }).join("")
+      : `<li class="empty">${emptyMsg}</li>`;
+  }
+
+  function workoutStreak() {
+    const days = new Set(data.workouts.map((w) => w.date));
+    let streak = 0;
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    // allow today to be empty without breaking streak
+    if (!days.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
+    while (days.has(d.toISOString().slice(0, 10))) { streak++; d.setDate(d.getDate() - 1); }
+    return streak;
+  }
+
+  function renderSchool() {
+    const el = document.getElementById("school-list");
+    const items = [...data.school].sort((a, b) => (a.done - b.done) || a.due.localeCompare(b.due));
+    el.innerHTML = items.length ? items.map((s) => {
+      const r = relDue(s.due);
+      return `<div class="item ${s.done ? "done" : ""}">
+        <input type="checkbox" class="check" data-kind="school" data-id="${s.id}" ${s.done ? "checked" : ""}>
+        <div class="item-body"><div class="item-title">${esc(s.title)}</div>
+          <div class="item-sub"><span class="badge ${s.priority}">${s.priority}</span>
+          <span class="badge">${esc(s.type || "Assignment")}</span><span>${esc(s.subject)}</span>
+          <span class="badge ${r.overdue && !s.done ? "overdue" : ""}">${fmtDate(s.due)} · ${r.text}</span></div></div>
+        <button class="del" data-kind="school" data-id="${s.id}">×</button></div>`;
+    }).join("") : `<div class="empty-state">No assignments yet. Add one above to stay on top of deadlines.</div>`;
+  }
 
   function renderWorkouts() {
     const el = document.getElementById("workout-list");
     const items = [...data.workouts].sort((a, b) => b.date.localeCompare(a.date));
-    if (!items.length) {
-      el.innerHTML = `<div class="empty-state">No workouts logged yet. Add your first session above.</div>`;
-      return;
-    }
-    el.innerHTML = items
-      .map(
-        (w) => `
-      <div class="item">
-        <div class="item-body">
-          <div class="item-title">${esc(w.activity)}</div>
-          <div class="item-sub">
-            <span class="badge">${esc(w.type)}</span>
-            <span>${w.duration} min</span>
-            <span>${fmtDate(w.date)}</span>
-            ${w.notes ? `<span>· ${esc(w.notes)}</span>` : ""}
-          </div>
-        </div>
-        <button class="del" data-kind="workouts" data-id="${w.id}" title="Delete">×</button>
-      </div>`
-      )
-      .join("");
+    el.innerHTML = items.length ? items.map((w) => `
+      <div class="item"><div class="item-body"><div class="item-title">${esc(w.activity)}</div>
+        <div class="item-sub"><span class="badge">${esc(w.type)}</span><span>${esc(w.intensity || "")}</span>
+        <span>${w.duration} min</span><span>${fmtDate(w.date)}</span>${w.notes ? `<span>· ${esc(w.notes)}</span>` : ""}</div></div>
+        <button class="del" data-kind="workouts" data-id="${w.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No workouts logged yet.</div>`;
   }
 
-  // --- School ---
-  const schoolForm = document.getElementById("school-form");
-  document.getElementById("s-due").value = todayISO();
-  schoolForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    data.school.push({
-      id: uid(),
-      title: document.getElementById("s-title").value.trim(),
-      subject: document.getElementById("s-subject").value.trim(),
-      priority: document.getElementById("s-priority").value,
-      due: document.getElementById("s-due").value,
-      done: false,
-    });
-    save();
-    schoolForm.reset();
-    document.getElementById("s-due").value = todayISO();
-    render();
-  });
-
-  function renderSchool() {
-    const el = document.getElementById("school-list");
-    const items = [...data.school].sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1;
-      return a.due.localeCompare(b.due);
-    });
-    if (!items.length) {
-      el.innerHTML = `<div class="empty-state">No assignments yet. Add one to stay on top of deadlines.</div>`;
-      return;
-    }
-    el.innerHTML = items
-      .map((s) => {
-        const rel = relativeDue(s.due);
-        return `
-      <div class="item ${s.done ? "done" : ""}">
-        <input type="checkbox" class="check" data-kind="school" data-id="${s.id}" ${s.done ? "checked" : ""}>
-        <div class="item-body">
-          <div class="item-title">${esc(s.title)}</div>
-          <div class="item-sub">
-            <span class="badge ${s.priority}">${s.priority}</span>
-            <span>${esc(s.subject)}</span>
-            <span class="badge ${rel.overdue && !s.done ? "overdue" : ""}">${fmtDate(s.due)} · ${rel.text}</span>
-          </div>
-        </div>
-        <button class="del" data-kind="school" data-id="${s.id}" title="Delete">×</button>
-      </div>`;
-      })
-      .join("");
+  function renderHealth() {
+    const last = [...data.checkins].sort((a, b) => b.date.localeCompare(a.date))[0];
+    const wkStart = mondayOf(new Date());
+    const weekWorkouts = data.workouts.filter((w) => new Date(w.date + "T00:00:00") >= wkStart);
+    const weekMin = weekWorkouts.reduce((s, w) => s + (w.duration || 0), 0);
+    const avgSleep = avgField(data.checkins.slice(-7), "sleep");
+    document.getElementById("health-stats").innerHTML =
+      statCard(weekMin + "<small> min</small>", "Training this week") +
+      statCard(workoutStreak() + "<small> d</small>", "Current streak") +
+      statCard((avgSleep ? avgSleep.toFixed(1) : "–") + "<small> h</small>", "Avg sleep (7d)") +
+      statCard(last && last.weight ? last.weight : "–", "Latest weight");
+    renderVolumeChart();
   }
 
-  // --- Tasks ---
-  const taskForm = document.getElementById("task-form");
-  taskForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    data.tasks.push({
-      id: uid(),
-      title: document.getElementById("t-title").value.trim(),
-      category: document.getElementById("t-category").value,
-      due: document.getElementById("t-due").value || "",
-      done: false,
-    });
-    save();
-    taskForm.reset();
-    render();
-  });
+  function avgField(arr, f) {
+    const vals = arr.map((x) => x[f]).filter((v) => typeof v === "number");
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  }
+
+  function renderVolumeChart() {
+    const el = document.getElementById("volume-chart");
+    const weeks = [];
+    let start = mondayOf(new Date());
+    for (let i = 7; i >= 0; i--) {
+      const ws = new Date(start); ws.setDate(ws.getDate() - i * 7);
+      const we = new Date(ws); we.setDate(we.getDate() + 7);
+      const min = data.workouts
+        .filter((w) => { const d = new Date(w.date + "T00:00:00"); return d >= ws && d < we; })
+        .reduce((s, w) => s + (w.duration || 0), 0);
+      weeks.push({ label: `${ws.getMonth() + 1}/${ws.getDate()}`, min });
+    }
+    const max = Math.max(60, ...weeks.map((w) => w.min));
+    el.innerHTML = weeks.map((w) => `
+      <div class="bar-wrap" title="${w.min} min">
+        <span class="bar-val">${w.min || ""}</span>
+        <div class="bar" style="height:${(w.min / max) * 100}%"></div>
+        <span class="bar-label">${w.label}</span>
+      </div>`).join("");
+  }
+
+  function renderWrestling() {
+    const items = [...data.wrestling].sort((a, b) => b.date.localeCompare(a.date));
+    const wins = items.filter((m) => m.result === "Win").length;
+    const losses = items.length - wins;
+    const pins = items.filter((m) => m.method === "Pin").length;
+    document.getElementById("wrestling-stats").innerHTML =
+      statCard(`${wins}<small>-${losses}</small>`, "Record") +
+      statCard(items.length ? Math.round((wins / items.length) * 100) + "<small>%</small>" : "–", "Win rate") +
+      statCard(pins, "Pins");
+    const el = document.getElementById("wrestling-list");
+    el.innerHTML = items.length ? items.map((m) => `
+      <div class="item ${m.result.toLowerCase()}"><div class="item-body">
+        <div class="item-title">vs ${esc(m.opponent)} ${m.score ? `· ${esc(m.score)}` : ""}</div>
+        <div class="item-sub"><span class="badge ${m.result.toLowerCase()}">${m.result}</span>
+        <span class="badge">${esc(m.method)}</span>${m.event ? `<span>${esc(m.event)}</span>` : ""}
+        <span>${fmtDate(m.date)}</span>${m.notes ? `<span>· ${esc(m.notes)}</span>` : ""}</div></div>
+        <button class="del" data-kind="wrestling" data-id="${m.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No matches logged yet.</div>`;
+  }
+
+  function renderBaseball() {
+    const items = [...data.baseball].sort((a, b) => b.date.localeCompare(a.date));
+    const sum = (f) => items.reduce((s, g) => s + (g[f] || 0), 0);
+    const ab = sum("ab"), h = sum("h"), bb = sum("bb");
+    const avg = ab ? (h / ab) : 0;
+    const obp = (ab + bb) ? (h + bb) / (ab + bb) : 0;
+    document.getElementById("baseball-stats").innerHTML =
+      statCard(ab ? avg.toFixed(3).replace(/^0/, "") : "–", "Batting avg") +
+      statCard(ab ? obp.toFixed(3).replace(/^0/, "") : "–", "On-base %") +
+      statCard(h, "Hits") +
+      statCard(sum("rbi"), "RBI");
+    const el = document.getElementById("baseball-list");
+    el.innerHTML = items.length ? items.map((g) => `
+      <div class="item"><div class="item-body">
+        <div class="item-title">${fmtDate(g.date)}${g.opponent ? ` vs ${esc(g.opponent)}` : ""}</div>
+        <div class="item-sub"><span>${g.h}-${g.ab}</span><span>${g.rbi} RBI</span><span>${g.r} R</span>
+        <span>${g.bb} BB</span><span>${g.k} K</span></div></div>
+        <button class="del" data-kind="baseball" data-id="${g.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No games logged yet.</div>`;
+  }
 
   function renderTasks() {
     const el = document.getElementById("task-list");
-    const items = [...data.tasks].sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1;
-      return (a.due || "9999").localeCompare(b.due || "9999");
-    });
-    if (!items.length) {
-      el.innerHTML = `<div class="empty-state">No tasks yet. Add something you need to get done.</div>`;
-      return;
-    }
-    el.innerHTML = items
-      .map((t) => {
-        const rel = t.due ? relativeDue(t.due) : null;
-        return `
-      <div class="item ${t.done ? "done" : ""}">
+    const items = [...data.tasks].sort((a, b) => (a.done - b.done) || (a.due || "9999").localeCompare(b.due || "9999"));
+    el.innerHTML = items.length ? items.map((t) => {
+      const r = t.due ? relDue(t.due) : null;
+      return `<div class="item ${t.done ? "done" : ""}">
         <input type="checkbox" class="check" data-kind="tasks" data-id="${t.id}" ${t.done ? "checked" : ""}>
-        <div class="item-body">
-          <div class="item-title">${esc(t.title)}</div>
-          <div class="item-sub">
-            <span class="badge">${esc(t.category)}</span>
-            ${rel ? `<span class="badge ${rel.overdue && !t.done ? "overdue" : ""}">${fmtDate(t.due)} · ${rel.text}</span>` : ""}
-          </div>
-        </div>
-        <button class="del" data-kind="tasks" data-id="${t.id}" title="Delete">×</button>
-      </div>`;
-      })
-      .join("");
+        <div class="item-body"><div class="item-title">${esc(t.title)}</div>
+          <div class="item-sub"><span class="badge">${esc(t.category)}</span>
+          ${r ? `<span class="badge ${r.overdue && !t.done ? "overdue" : ""}">${fmtDate(t.due)} · ${r.text}</span>` : ""}</div></div>
+        <button class="del" data-kind="tasks" data-id="${t.id}">×</button></div>`;
+    }).join("") : `<div class="empty-state">No tasks yet. Add something you need to get done.</div>`;
   }
 
-  // --- Dashboard ---
-  function renderDashboard() {
-    const weekStart = startOfWeek();
-    const weekWorkouts = data.workouts.filter((w) => new Date(w.date + "T00:00:00") >= weekStart);
-    const weekMinutes = weekWorkouts.reduce((sum, w) => sum + (w.duration || 0), 0);
-    const openSchool = data.school.filter((s) => !s.done);
-    const openTasks = data.tasks.filter((t) => !t.done);
-
-    document.getElementById("stats").innerHTML = `
-      <div class="stat-card"><div class="stat-num">${weekWorkouts.length}</div><div class="stat-label">Workouts this week</div></div>
-      <div class="stat-card"><div class="stat-num">${weekMinutes}</div><div class="stat-label">Active minutes</div></div>
-      <div class="stat-card"><div class="stat-num">${openSchool.length}</div><div class="stat-label">School to-dos</div></div>
-      <div class="stat-card"><div class="stat-num">${openTasks.length}</div><div class="stat-label">Open tasks</div></div>
-    `;
-
-    const schoolEl = document.getElementById("dash-school");
-    const upcomingSchool = [...openSchool].sort((a, b) => a.due.localeCompare(b.due)).slice(0, 5);
-    schoolEl.innerHTML = upcomingSchool.length
-      ? upcomingSchool
-          .map((s) => {
-            const rel = relativeDue(s.due);
-            return `<li><span>${esc(s.title)}</span><span class="meta ${rel.overdue ? "" : ""}">${rel.text}</span></li>`;
-          })
-          .join("")
-      : `<li class="empty">Nothing due. </li>`;
-
-    const wEl = document.getElementById("dash-workouts");
-    const recent = [...weekWorkouts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
-    wEl.innerHTML = recent.length
-      ? recent.map((w) => `<li><span>${esc(w.activity)}</span><span class="meta">${w.duration}m · ${fmtDate(w.date)}</span></li>`).join("")
-      : `<li class="empty">No workouts this week yet.</li>`;
-
-    const tEl = document.getElementById("dash-tasks");
-    const tasks = [...openTasks].sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999")).slice(0, 5);
-    tEl.innerHTML = tasks.length
-      ? tasks.map((t) => `<li><span>${esc(t.title)}</span><span class="meta">${t.due ? relativeDue(t.due).text : t.category}</span></li>`).join("")
-      : `<li class="empty">All clear!</li>`;
+  // ============ LUNCH ============
+  // Convert a pasted Nutrislice front-end URL into its public weekly-menu API URL for a date.
+  function nutrisliceApi(url, date) {
+    try {
+      const u = new URL(url);
+      if (!u.hostname.endsWith("nutrislice.com")) return null;
+      const parts = u.pathname.split("/").filter(Boolean); // e.g. ["menu","school-slug","lunch", ...]
+      const mi = parts.findIndex((p) => p === "menu" || p === "menus");
+      if (mi === -1 || parts.length < mi + 3) return null;
+      const school = parts[mi + 1];
+      const type = parts[mi + 2];
+      const [y, m, d] = date.split("-");
+      return `${u.protocol}//${u.hostname}/menu/api/weeks/school/${school}/menu-type/${type}/${y}/${m}/${d}/`;
+    } catch { return null; }
   }
 
-  // --- Shared events (toggle / delete) ---
-  document.querySelector("main").addEventListener("click", (e) => {
-    const del = e.target.closest(".del");
-    if (del) {
-      const { kind, id } = del.dataset;
-      data[kind] = data[kind].filter((x) => x.id !== id);
-      save();
-      render();
+  function extractDishes(json, date) {
+    const day = (json.days || []).find((d) => d.date === date);
+    if (!day) return [];
+    return (day.menu_items || [])
+      .filter((it) => it.food && it.food.name)
+      .map((it) => it.food.name);
+  }
+
+  let lunchCache = { date: null, dishes: null, error: null };
+
+  async function fetchLunch() {
+    const date = todayISO();
+    if (lunchCache.date === date) return lunchCache;
+    lunchCache = { date, dishes: null, error: null };
+    if (!data.settings.lunchUrl) { lunchCache.error = "no-url"; return lunchCache; }
+    const api = nutrisliceApi(data.settings.lunchUrl, date);
+    if (!api) { lunchCache.error = "bad-url"; return lunchCache; }
+    try {
+      const res = await fetch(api, { headers: { Accept: "application/json" } });
+      if (!res.ok) throw new Error("http " + res.status);
+      const json = await res.json();
+      lunchCache.dishes = extractDishes(json, date);
+    } catch (e) {
+      lunchCache.error = "fetch";
     }
-  });
-
-  document.querySelector("main").addEventListener("change", (e) => {
-    const chk = e.target.closest(".check");
-    if (chk) {
-      const { kind, id } = chk.dataset;
-      const item = data[kind].find((x) => x.id === id);
-      if (item) {
-        item.done = chk.checked;
-        save();
-        render();
-      }
-    }
-  });
-
-  function esc(str) {
-    return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    return lunchCache;
   }
 
-  function render() {
-    renderDashboard();
-    renderWorkouts();
-    renderSchool();
-    renderTasks();
+  async function loadLunch() {
+    const el = document.getElementById("lunch-content");
+    el.innerHTML = `<p class="hint">Loading today's menu…</p>`;
+    const r = await fetchLunch();
+    if (r.error === "no-url") {
+      el.innerHTML = `<h3>Today's lunch</h3><p class="hint">No menu connected yet. Add your school's Nutrislice link in <strong>Settings</strong> to see the daily menu here.</p>`;
+    } else if (r.error === "bad-url") {
+      el.innerHTML = `<h3>Today's lunch</h3><p class="hint">That link doesn't look like a Nutrislice menu URL. Check it in Settings.</p>`;
+    } else if (r.error === "fetch") {
+      el.innerHTML = `<h3>Today's lunch</h3><p class="hint">Couldn't reach the menu automatically (the school's site may block outside requests — we'll fix this when the backend is added). <a href="${esc(data.settings.lunchUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">Open the menu directly →</a></p>`;
+    } else if (!r.dishes || !r.dishes.length) {
+      el.innerHTML = `<h3>Today's lunch</h3><p class="hint">No items listed for today (could be a weekend or holiday). <a href="${esc(data.settings.lunchUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View full menu →</a></p>`;
+    } else {
+      el.innerHTML = `<h3>Today's lunch — ${fmtDate(todayISO())}</h3>` +
+        r.dishes.map((d) => `<div class="dish">• ${esc(d)}</div>`).join("");
+    }
+  }
+
+  function renderDashLunch() {
+    const el = document.getElementById("dash-lunch");
+    if (!data.settings.lunchUrl) { el.innerHTML = `<span class="empty">Connect a menu in Settings.</span>`; return; }
+    if (lunchCache.date === todayISO() && lunchCache.dishes && lunchCache.dishes.length) {
+      el.innerHTML = lunchCache.dishes.slice(0, 4).map((d) => `<div class="dish">• ${esc(d)}</div>`).join("");
+    } else {
+      el.innerHTML = `<span class="empty">Open the Lunch tab to load today's menu.</span>`;
+    }
   }
 
   render();
+  // Try to warm the lunch cache in the background so the dashboard can show it.
+  if (data.settings.lunchUrl) fetchLunch().then(() => renderDashLunch());
 })();

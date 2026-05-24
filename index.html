@@ -3,100 +3,295 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Life Organizer</title>
+  <title>Life Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="app-header">
-    <div class="brand">
-      <span class="brand-mark">LO</span>
-      <h1>Life Organizer</h1>
-    </div>
-    <nav class="tabs" id="tabs">
-      <button class="tab active" data-view="dashboard">Dashboard</button>
-      <button class="tab" data-view="workouts">Workouts</button>
-      <button class="tab" data-view="school">School</button>
-      <button class="tab" data-view="tasks">Tasks</button>
-    </nav>
-  </header>
-
-  <main class="container">
-    <!-- DASHBOARD -->
-    <section class="view active" id="view-dashboard">
-      <h2 class="view-title">Today at a glance</h2>
-      <div class="stats" id="stats"></div>
-
-      <div class="dash-grid">
-        <div class="card">
-          <h3>Upcoming school deadlines</h3>
-          <ul class="mini-list" id="dash-school"></ul>
-        </div>
-        <div class="card">
-          <h3>This week's workouts</h3>
-          <ul class="mini-list" id="dash-workouts"></ul>
-        </div>
-        <div class="card">
-          <h3>Open tasks</h3>
-          <ul class="mini-list" id="dash-tasks"></ul>
-        </div>
+  <div class="app">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">LH</span>
+        <span class="brand-name">Life&nbsp;Hub</span>
       </div>
-    </section>
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-view="dashboard"><span class="ic">◆</span> Dashboard</button>
+        <button class="nav-item" data-view="school"><span class="ic">✎</span> School</button>
+        <button class="nav-item" data-view="sports"><span class="ic">⛰</span> Sports</button>
+        <button class="nav-item" data-view="health"><span class="ic">❤</span> Health &amp; Workout</button>
+        <button class="nav-item" data-view="swing"><span class="ic">⚾</span> Swing Lab</button>
+        <button class="nav-item" data-view="lunch"><span class="ic">🍽</span> Lunch</button>
+        <button class="nav-item" data-view="tasks"><span class="ic">✓</span> Tasks</button>
+      </nav>
+      <button class="nav-item nav-settings" data-view="settings"><span class="ic">⚙</span> Settings</button>
+    </aside>
 
-    <!-- WORKOUTS -->
-    <section class="view" id="view-workouts">
-      <h2 class="view-title">Sports Workouts</h2>
-      <form class="entry-form" id="workout-form">
-        <input type="text" id="w-activity" placeholder="Activity (e.g. Soccer, Running)" required>
-        <select id="w-type">
-          <option value="Cardio">Cardio</option>
-          <option value="Strength">Strength</option>
-          <option value="Team Sport">Team Sport</option>
-          <option value="Flexibility">Flexibility</option>
-          <option value="Other">Other</option>
-        </select>
-        <input type="number" id="w-duration" placeholder="Min" min="1" required>
-        <input type="date" id="w-date" required>
-        <input type="text" id="w-notes" placeholder="Notes (optional)">
-        <button type="submit">Add</button>
-      </form>
-      <div class="list" id="workout-list"></div>
-    </section>
+    <main class="content">
+      <!-- DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow" id="dash-date"></p>
+            <h1 id="dash-greeting">Welcome back</h1>
+          </div>
+        </div>
 
-    <!-- SCHOOL -->
-    <section class="view" id="view-school">
-      <h2 class="view-title">School</h2>
-      <form class="entry-form" id="school-form">
-        <input type="text" id="s-title" placeholder="Assignment / exam" required>
-        <input type="text" id="s-subject" placeholder="Subject" required>
-        <select id="s-priority">
-          <option value="low">Low</option>
-          <option value="medium" selected>Medium</option>
-          <option value="high">High</option>
-        </select>
-        <input type="date" id="s-due" required>
-        <button type="submit">Add</button>
-      </form>
-      <div class="list" id="school-list"></div>
-    </section>
+        <div class="brief card glow">
+          <h3>Your daily brief</h3>
+          <p id="brief-text" class="brief-text"></p>
+          <p class="brief-note">AI-generated briefs unlock when we connect the backend — this version is built from your data.</p>
+        </div>
 
-    <!-- TASKS -->
-    <section class="view" id="view-tasks">
-      <h2 class="view-title">Tasks</h2>
-      <form class="entry-form" id="task-form">
-        <input type="text" id="t-title" placeholder="What needs doing?" required>
-        <select id="t-category">
-          <option value="General">General</option>
-          <option value="Sports">Sports</option>
-          <option value="School">School</option>
-          <option value="Personal">Personal</option>
-        </select>
-        <input type="date" id="t-due" placeholder="Due">
-        <button type="submit">Add</button>
-      </form>
-      <div class="list" id="task-list"></div>
-    </section>
-  </main>
+        <div class="stats" id="stats"></div>
+
+        <div class="dash-grid">
+          <div class="card">
+            <h3>Due soon — school</h3>
+            <ul class="mini-list" id="dash-school"></ul>
+          </div>
+          <div class="card">
+            <h3>This week's training</h3>
+            <ul class="mini-list" id="dash-workouts"></ul>
+          </div>
+          <div class="card">
+            <h3>Open tasks</h3>
+            <ul class="mini-list" id="dash-tasks"></ul>
+          </div>
+          <div class="card">
+            <h3>Today's lunch</h3>
+            <div id="dash-lunch" class="lunch-mini"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCHOOL -->
+      <section class="view" id="view-school">
+        <div class="page-head"><h1>School</h1></div>
+        <form class="entry-form" id="school-form">
+          <input type="text" id="s-title" placeholder="Assignment / exam / project" required>
+          <input type="text" id="s-subject" placeholder="Subject" required>
+          <select id="s-type">
+            <option value="Assignment">Assignment</option>
+            <option value="Exam">Exam</option>
+            <option value="Project">Project</option>
+            <option value="Reading">Reading</option>
+          </select>
+          <select id="s-priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+          <input type="date" id="s-due" required>
+          <button type="submit">Add</button>
+        </form>
+        <p class="hint">Tip: break a big project into smaller assignments to track real progress.</p>
+        <div class="list" id="school-list"></div>
+      </section>
+
+      <!-- SPORTS -->
+      <section class="view" id="view-sports">
+        <div class="page-head"><h1>Sports</h1></div>
+        <div class="subtabs" id="sports-subtabs">
+          <button class="subtab active" data-sub="wrestling">Wrestling</button>
+          <button class="subtab" data-sub="baseball">Baseball</button>
+        </div>
+
+        <div class="subview active" id="sub-wrestling">
+          <form class="entry-form" id="wrestling-form">
+            <input type="text" id="wr-opponent" placeholder="Opponent" required>
+            <input type="text" id="wr-event" placeholder="Event / meet">
+            <input type="date" id="wr-date" required>
+            <select id="wr-result">
+              <option value="Win">Win</option>
+              <option value="Loss">Loss</option>
+            </select>
+            <select id="wr-method">
+              <option value="Decision">Decision</option>
+              <option value="Major">Major Dec.</option>
+              <option value="Tech">Tech Fall</option>
+              <option value="Pin">Pin / Fall</option>
+              <option value="Forfeit">Forfeit</option>
+            </select>
+            <input type="text" id="wr-score" placeholder="Score (e.g. 7-3)">
+            <input type="text" id="wr-notes" placeholder="Notes / what to work on">
+            <button type="submit">Log match</button>
+          </form>
+          <div class="stats" id="wrestling-stats"></div>
+          <div class="list" id="wrestling-list"></div>
+        </div>
+
+        <div class="subview" id="sub-baseball">
+          <form class="entry-form" id="baseball-form">
+            <input type="date" id="bb-date" required>
+            <input type="text" id="bb-opponent" placeholder="Opponent">
+            <input type="number" id="bb-ab" placeholder="AB" min="0">
+            <input type="number" id="bb-h" placeholder="H" min="0">
+            <input type="number" id="bb-rbi" placeholder="RBI" min="0">
+            <input type="number" id="bb-r" placeholder="R" min="0">
+            <input type="number" id="bb-bb" placeholder="BB" min="0">
+            <input type="number" id="bb-k" placeholder="K" min="0">
+            <button type="submit">Log game</button>
+          </form>
+          <div class="stats" id="baseball-stats"></div>
+          <p class="hint">Want to break down your mechanics? Head to the <strong>Swing Lab</strong> to upload a swing.</p>
+          <div class="list" id="baseball-list"></div>
+        </div>
+      </section>
+
+      <!-- HEALTH & WORKOUT -->
+      <section class="view" id="view-health">
+        <div class="page-head"><h1>Health &amp; Workout</h1></div>
+
+        <div class="stats" id="health-stats"></div>
+
+        <div class="dash-grid">
+          <div class="card">
+            <h3>Log a workout</h3>
+            <form class="entry-form stacked" id="workout-form">
+              <input type="text" id="w-activity" placeholder="Activity (e.g. Lift, Run, Practice)" required>
+              <div class="row">
+                <select id="w-type">
+                  <option value="Cardio">Cardio</option>
+                  <option value="Strength">Strength</option>
+                  <option value="Team Sport">Team Sport</option>
+                  <option value="Conditioning">Conditioning</option>
+                  <option value="Mobility">Mobility</option>
+                </select>
+                <select id="w-intensity">
+                  <option value="Easy">Easy</option>
+                  <option value="Moderate" selected>Moderate</option>
+                  <option value="Hard">Hard</option>
+                </select>
+              </div>
+              <div class="row">
+                <input type="number" id="w-duration" placeholder="Minutes" min="1" required>
+                <input type="date" id="w-date" required>
+              </div>
+              <input type="text" id="w-notes" placeholder="Notes (optional)">
+              <button type="submit">Add workout</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>Daily check-in</h3>
+            <form class="entry-form stacked" id="checkin-form">
+              <input type="date" id="h-date" required>
+              <div class="row">
+                <input type="number" step="0.5" id="h-sleep" placeholder="Sleep (hrs)">
+                <input type="number" step="0.1" id="h-weight" placeholder="Weight">
+              </div>
+              <div class="row">
+                <input type="number" id="h-water" placeholder="Water (cups)">
+                <select id="h-mood">
+                  <option value="">Mood…</option>
+                  <option value="5">Great</option>
+                  <option value="4">Good</option>
+                  <option value="3">Okay</option>
+                  <option value="2">Low</option>
+                  <option value="1">Rough</option>
+                </select>
+              </div>
+              <button type="submit">Save check-in</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Training volume — last 8 weeks</h3>
+          <div id="volume-chart" class="chart"></div>
+        </div>
+
+        <div class="card">
+          <h3>Workout log</h3>
+          <div class="list" id="workout-list"></div>
+        </div>
+      </section>
+
+      <!-- SWING LAB -->
+      <section class="view" id="view-swing">
+        <div class="page-head"><h1>Swing Lab</h1></div>
+        <div class="card">
+          <h3>Baseball swing analyzer</h3>
+          <p class="hint">Upload a short side-on clip of your swing. Your phone tracks your body on-device — nothing is uploaded to a server.</p>
+          <div class="swing-controls">
+            <label class="file-btn">
+              <input type="file" id="swing-file" accept="video/*">
+              Choose swing video
+            </label>
+            <button id="swing-analyze" disabled>Analyze</button>
+          </div>
+          <div class="swing-stage">
+            <video id="swing-video" playsinline muted controls></video>
+            <canvas id="swing-canvas"></canvas>
+          </div>
+          <p id="swing-status" class="swing-status"></p>
+          <div id="swing-results" class="swing-results"></div>
+        </div>
+      </section>
+
+      <!-- LUNCH -->
+      <section class="view" id="view-lunch">
+        <div class="page-head"><h1>Lunch</h1></div>
+        <div class="card" id="lunch-card">
+          <div id="lunch-content"></div>
+        </div>
+      </section>
+
+      <!-- TASKS -->
+      <section class="view" id="view-tasks">
+        <div class="page-head"><h1>Tasks</h1></div>
+        <form class="entry-form" id="task-form">
+          <input type="text" id="t-title" placeholder="What needs doing?" required>
+          <select id="t-category">
+            <option value="General">General</option>
+            <option value="School">School</option>
+            <option value="Sports">Sports</option>
+            <option value="Personal">Personal</option>
+            <option value="Chores">Chores</option>
+          </select>
+          <input type="date" id="t-due">
+          <button type="submit">Add</button>
+        </form>
+        <div class="list" id="task-list"></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <div class="page-head"><h1>Settings</h1></div>
+        <div class="card">
+          <h3>School lunch feed</h3>
+          <p class="hint">Paste your school's Nutrislice menu link (open the menu on the district site, copy the URL — it contains <code>nutrislice.com</code>). I'll pull today's menu from it.</p>
+          <form class="entry-form stacked" id="lunch-form">
+            <input type="url" id="lunch-url" placeholder="https://yourschool.nutrislice.com/menu/...">
+            <button type="submit">Save</button>
+          </form>
+          <p id="lunch-save-status" class="hint"></p>
+        </div>
+        <div class="card">
+          <h3>Your name</h3>
+          <form class="entry-form stacked" id="name-form">
+            <input type="text" id="user-name" placeholder="First name (for your dashboard greeting)">
+            <button type="submit">Save</button>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Your data</h3>
+          <p class="hint">Everything is stored privately in this browser. Export to back up or move devices.</p>
+          <div class="swing-controls">
+            <button id="export-btn">Export data</button>
+            <label class="file-btn">
+              <input type="file" id="import-file" accept="application/json">
+              Import data
+            </label>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="app.js"></script>
+  <script type="module" src="swing.js"></script>
 </body>
 </html>
