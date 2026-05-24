@@ -56,10 +56,9 @@
         <div class="card" id="gameweek">
           <h3>Game week</h3>
           <form class="entry-form" id="gw-form" style="margin-bottom:14px">
-            <input type="text" id="gw-name" placeholder="Next game / match (e.g. Districts)">
+            <input type="text" id="gw-name" placeholder="Game / match (e.g. Districts)">
             <input type="date" id="gw-date">
-            <button type="submit">Set</button>
-            <button type="button" id="gw-clear" class="btn-ghost">Clear</button>
+            <button type="submit">Add game</button>
           </form>
           <div id="gw-body"></div>
         </div>
@@ -76,6 +75,10 @@
         <div class="stats" id="stats"></div>
 
         <div class="dash-grid">
+          <div class="card">
+            <h3>Next 3 days</h3>
+            <ul class="mini-list" id="dash-agenda"></ul>
+          </div>
           <div class="card">
             <h3>Due soon — school</h3>
             <ul class="mini-list" id="dash-school"></ul>
@@ -121,13 +124,19 @@
                 <input type="date" id="e-date" required>
                 <input type="time" id="e-time">
               </div>
-              <select id="e-type">
-                <option value="Game">Game / Match</option>
-                <option value="Practice">Practice</option>
-                <option value="Exam">Exam</option>
-                <option value="Work">Work</option>
-                <option value="Personal">Personal</option>
-              </select>
+              <div class="row">
+                <select id="e-type">
+                  <option value="Game">Game / Match</option>
+                  <option value="Practice">Practice</option>
+                  <option value="Exam">Exam</option>
+                  <option value="Work">Work</option>
+                  <option value="Personal">Personal</option>
+                </select>
+                <select id="e-repeat">
+                  <option value="none">Once</option>
+                  <option value="weekly">Repeats weekly</option>
+                </select>
+              </div>
               <button type="submit">Add to calendar</button>
             </form>
             <div id="cal-day-events" class="list"></div>

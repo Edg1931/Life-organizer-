@@ -275,7 +275,7 @@
 
   document.getElementById("event-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    data.events.push({ id: uid(), title: val("e-title").trim(), date: val("e-date"), time: val("e-time"), type: val("e-type") });
+    data.events.push({ id: uid(), title: val("e-title").trim(), date: val("e-date"), time: val("e-time"), type: val("e-type"), repeat: val("e-repeat") });
     save(); e.target.reset(); document.getElementById("e-date").value = calSelected; render();
   });
   document.getElementById("cal-prev").addEventListener("click", () => { calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
@@ -288,15 +288,13 @@
     renderCalendar();
   });
 
-  // Game week
+  // Game week — adds a Game event to the calendar (they stay in sync)
   document.getElementById("gw-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    data.settings.nextEvent = { name: val("gw-name").trim(), date: val("gw-date") };
-    save(); render();
-  });
-  document.getElementById("gw-clear").addEventListener("click", () => {
-    data.settings.nextEvent = { name: "", date: "" };
-    save(); render();
+    const date = val("gw-date");
+    if (!date) return;
+    data.events.push({ id: uid(), title: val("gw-name").trim() || "Game", date, time: "", type: "Game", repeat: "none" });
+    save(); e.target.reset(); render();
   });
 
   // Strength / lifts
@@ -534,20 +532,30 @@
     renderDashLunch();
     renderStreaks();
     renderGameWeek();
+    renderAgenda();
+  }
+
+  function renderAgenda() {
+    const items = upcomingEvents(3);
+    const el = document.getElementById("dash-agenda");
+    el.innerHTML = items.length
+      ? items.slice(0, 6).map((it) => {
+        const r = relDue(it.date);
+        const tag = it.type === "school" ? "due" : esc(String(it.type || ""));
+        return `<li><span>${esc(it.title)}</span><span class="meta">${r.text}${tag ? " · " + tag : ""}</span></li>`;
+      }).join("")
+      : `<li class="empty">Clear for the next few days.</li>`;
   }
 
   function renderGameWeek() {
-    const ev = (data.settings.nextEvent) || { name: "", date: "" };
-    document.getElementById("gw-name").value = ev.name || "";
-    document.getElementById("gw-date").value = ev.date || "";
     const body = document.getElementById("gw-body");
-    if (!ev.date) {
-      body.innerHTML = `<p class="hint">Set your next game or match and I'll build a day-by-day plan — training, study, and fueling.</p>`;
+    const g = nextGame();
+    if (!g) {
+      body.innerHTML = `<p class="hint">No upcoming games scheduled. Add one above (or on the Calendar) and I'll build a day-by-day plan — training, study, and fueling.</p>`;
       return;
     }
-    const d = daysUntil(ev.date);
-    const name = esc(ev.name || "Your event");
-    if (d < 0) { body.innerHTML = `<p class="hint">${name} has passed — set your next one above.</p>`; return; }
+    const d = daysUntil(g.date);
+    const name = esc(g.label || "Your game");
 
     let phase, plan;
     if (d > 7) { phase = "Build"; plan = ["Train hard — normal lifts and conditioning.", "Eat and sleep well to build.", "Get ahead on schoolwork now while the week is open."]; }
@@ -555,12 +563,12 @@
     else if (d >= 1) { phase = "Taper"; plan = ["Light movement only — rest and recover.", "Hydrate well and prioritize sleep.", "Don't try any new foods or routines.", "Pack your gear tonight."]; }
     else { phase = "Game day"; plan = ["Eat a familiar meal about 3 hours before.", "Hydrate steadily through the day.", "Do your full dynamic warm-up.", "Trust your training — go compete. 🔥"]; }
 
-    const dueBefore = data.school.filter((s) => !s.done && s.due && s.due <= ev.date).length;
+    const dueBefore = data.school.filter((s) => !s.done && s.due && s.due <= g.date).length;
     const cd = d === 0 ? "Today" : d === 1 ? "Tomorrow" : `in ${d} days`;
     body.innerHTML = `
       <div class="gw-count">
         <span class="gw-d">${d === 0 ? "🏆" : d}</span>
-        <div><div class="gw-name">${name}</div><div class="gw-when">${cd} · ${fmtDate(ev.date)}</div></div>
+        <div><div class="gw-name">${name}</div><div class="gw-when">${cd} · ${fmtDate(g.date)}</div></div>
         <span class="badge gw-phase">${phase}</span>
       </div>
       ${dueBefore ? `<div class="sug"><span class="sug-i">📚</span><span>${dueBefore} school item${dueBefore > 1 ? "s" : ""} due before ${name} — knock ${dueBefore > 1 ? "them" : "it"} out early so game week stays calm.</span></div>` : ""}
@@ -573,11 +581,27 @@
   }
   function calItems() {
     const items = [];
-    data.events.forEach((e) => items.push({ date: e.date, label: e.title, cls: typeCls(e.type), kind: "event", ref: e }));
+    data.events.forEach((e) => {
+      const base = { label: e.title, cls: typeCls(e.type), kind: "event", ref: e };
+      if (e.repeat === "weekly" && e.date) {
+        const start = new Date(e.date + "T00:00:00");
+        for (let i = 0; i < 60; i++) { const d = new Date(start); d.setDate(d.getDate() + i * 7); items.push({ ...base, date: isoLocal(d) }); }
+      } else {
+        items.push({ ...base, date: e.date });
+      }
+    });
     data.school.filter((s) => !s.done && s.due).forEach((s) => items.push({ date: s.due, label: s.title, cls: "c-exam", kind: "school", ref: s }));
+    // legacy single game-week event
     const ne = data.settings.nextEvent;
     if (ne && ne.date) items.push({ date: ne.date, label: ne.name || "Game", cls: "c-game", kind: "game", ref: ne });
     return items;
+  }
+
+  function nextGame() {
+    const today = isoLocal(new Date());
+    return calItems()
+      .filter((it) => (it.kind === "game" || (it.kind === "event" && it.ref.type === "Game")) && it.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date))[0] || null;
   }
   function eventsByDate() {
     const m = {};
@@ -630,7 +654,7 @@
       .sort((a, b) => ((a.ref.time || "99") > (b.ref.time || "99") ? 1 : -1));
     const el = document.getElementById("cal-day-events");
     el.innerHTML = items.length ? items.map((it) => {
-      const meta = it.kind === "school" ? "School due" : it.kind === "game" ? "Game week" : esc(it.ref.type || "Event");
+      const meta = it.kind === "school" ? "School due" : it.kind === "game" ? "Game week" : esc(it.ref.type || "Event") + (it.ref.repeat === "weekly" ? " · weekly" : "");
       const timeStr = it.kind === "event" && it.ref.time ? fmtTime(it.ref.time) : "";
       return `<div class="item"><div class="item-body"><div class="item-title">${esc(it.label)}</div>
         <div class="item-sub"><span class="badge ${it.cls}">${meta}</span>${timeStr ? `<span>${timeStr}</span>` : ""}</div></div>
