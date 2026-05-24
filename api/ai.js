@@ -88,6 +88,10 @@ function buildPrompt(kind, payload) {
       return `The student wants a workout. Their request: "${(p.request || "a balanced 45-minute session").slice(0, 300)}".\n\nRecent training context:\n${JSON.stringify(p.context || {}, null, 2)}\n\nDesign one specific session: a short warm-up, the main work as exercises with sets × reps and rough intensity, and a quick cooldown. Keep it realistic for a high-school athlete with normal gym access. Plain text, simple "- " bullets, no markdown headers.`;
     case "nutrition":
       return `The student is a high-school athlete (wrestler) fueling for performance. Today's snapshot:\n${JSON.stringify(p.context || {}, null, 2)}\n\nGoal: ${(p.intent || "maintain their weight and fuel well").slice(0, 200)}.\n\nSuggest 3-5 specific, realistic snacks/meals with rough calorie estimates that fit their remaining calories for the day, favoring nutrient-dense, performance-supporting foods (protein + smart carbs + hydration).\n\nSAFETY — this is non-negotiable: promote healthy fueling and hydration. NEVER recommend skipping meals, severe restriction, dehydration, sweating out water weight, or any rapid weight-cut tactic. If the goal seems to involve unsafe rapid cutting, briefly and kindly steer them to talk with their coach, athletic trainer, or doctor instead. Plain text, simple "- " bullets.`;
+    case "wrestling-analysis":
+      return `Here is the wrestler's recent match log:\n${JSON.stringify(p.matches || [], null, 2)}\n\nAs their wrestling coach, give a short read on how they're wrestling: their record and any trend, what's working, recurring patterns in how they win or lose, and 2-3 specific things to drill next. Be encouraging and specific. Plain text, simple "- " bullets.`;
+    case "baseball-analysis":
+      return `Here is the player's recent batting log:\n${JSON.stringify(p.games || [], null, 2)}\n\nAs their hitting coach, give a short read on how they're hitting: trends in average and on-base, any hot or cold stretch, their strikeout-to-walk balance, and 2-3 specific things to work on. Be encouraging and specific. Plain text, simple "- " bullets.`;
     default:
       return null;
   }
@@ -141,7 +145,42 @@ function scheduleInstruction(payload) {
 }
 
 function isImageKind(kind) {
-  return isTutorKind(kind) || kind === "schedule-import";
+  return isTutorKind(kind) || kind === "schedule-import" || kind === "stats-import";
+}
+
+// ---- Video coaching (analyzes still frames pulled from a clip, in time order) ----
+const VIDEO_COACHES = {
+  swing: { name: "baseball swing", persona: "an expert baseball hitting coach", focus: "stance and setup, load, stride and timing, hip rotation and hip-shoulder separation, hand path to the ball, contact position, and extension and finish" },
+  pitching: { name: "pitching delivery", persona: "an expert baseball pitching coach", focus: "balance and leg lift, direction and stride length, hip-shoulder separation, arm action and arm slot, release point, and follow-through and deceleration" },
+  wrestling: { name: "wrestling", persona: "an expert wrestling coach", focus: "stance and level changes, motion and hand-fighting, shot setup and penetration step, finishing on the legs, sprawl and down-block defense, and scrambling and position" },
+  polevault: { name: "pole vault", persona: "an expert pole vault coach", focus: "approach-run rhythm and acceleration, pole carry and plant timing, takeoff position under the pole, swing-up and trail-leg drive, extension and inversion, and the turn and bar clearance" },
+};
+
+function videoSystem(disc) {
+  const c = VIDEO_COACHES[disc] || VIDEO_COACHES.swing;
+  return `You are ${c.persona} reviewing video for a high-school athlete inside "Life Hub". You are shown several still frames captured in time order from a single ${c.name} clip.
+
+How to coach:
+- Treat the frames as one motion in sequence (frame 1 is earliest). Reconstruct what's happening across them.
+- Focus on ${c.focus}.
+- Be specific, concrete, and encouraging. Speak to the athlete as "you".
+- Give three things: (1) a quick read of what already looks good, (2) the 2-3 most important fixes in priority order, each with WHY it matters, and (3) 2-3 specific drills or cues to fix them.
+- If the frames are blurry or the athlete isn't fully in frame, say what you can and tell them how to film a better clip (side-on, full body, good light, slow-motion if possible).
+- If you notice a real injury risk or the athlete mentions pain, gently point them to their coach, athletic trainer, or doctor — don't diagnose.
+
+Format: plain text only. No markdown headers, no code fences. Short paragraphs and simple "- " bullets.`;
+}
+
+// ---- Stats import (reads a GameChanger-style screenshot into structured stats) ----
+const STATS_SYSTEM = `You read sports stats from a screenshot (for example a GameChanger box score or season stat screen) and return clean structured data for "Life Hub". Return ONLY valid JSON — no commentary, no code fences. If a numeric value isn't shown, use 0. Use strict YYYY-MM-DD for dates; if the year isn't shown, infer it from the provided today date.`;
+
+function statsInstruction(payload) {
+  const p = payload || {};
+  const today = (p.today || "").slice(0, 10);
+  if (p.sport === "wrestling") {
+    return `Today is ${today}. Read this wrestling stats screenshot and extract each match.\n\nReturn ONLY JSON in exactly this shape:\n{"matches": [{"date": "2026-01-12", "opponent": "name", "result": "Win", "method": "Decision", "score": "7-3"}]}\n- result is "Win" or "Loss". method is one of: Decision, Major, Tech, Pin, Forfeit.`;
+  }
+  return `Today is ${today}. Read this baseball stats screenshot (e.g. GameChanger) and extract each game's batting line.\n\nReturn ONLY JSON in exactly this shape:\n{"games": [{"date": "2026-04-03", "opponent": "name", "ab": 3, "h": 2, "rbi": 1, "r": 1, "bb": 0, "k": 1}]}\n- If it only shows season totals rather than per-game lines, return a single entry with opponent "Season totals".`;
 }
 
 // Pull a JSON object out of the model's reply, tolerating stray text or code fences.
@@ -185,13 +224,45 @@ export default async function handler(req, res) {
 
   const client = new Anthropic({ apiKey });
 
-  // ---- Image-based features: homework tutor + schedule import ----
+  // ---- Video coaching: analyze a sequence of frames pulled from a clip ----
+  if (kind === "video-analyze") {
+    const frames = (Array.isArray(payload.frames) ? payload.frames : [])
+      .filter((f) => f && f.data && f.mediaType)
+      .slice(0, 8);
+    if (!frames.length) return res.status(400).json({ error: "No video frames to analyze — try a different clip." });
+    const disc = payload.discipline;
+    const name = (VIDEO_COACHES[disc] || VIDEO_COACHES.swing).name;
+    const note = (payload.note || "").slice(0, 400).trim();
+
+    const content = frames.map((f) => ({ type: "image", source: { type: "base64", media_type: f.mediaType, data: f.data } }));
+    content.push({ type: "text", text: `These are ${frames.length} frames in time order from a ${name} clip.${note ? ` The athlete adds: "${note}".` : ""}\n\nBreak down the ${name} mechanics across the sequence and tell me specifically how to improve.` });
+
+    try {
+      const message = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1500,
+        system: [{ type: "text", text: videoSystem(disc), cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content }],
+      });
+      const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+      return res.status(200).json({ text });
+    } catch (e) {
+      const status = (e && e.status) || 500;
+      return res.status(status).json({ error: (e && e.message) || "AI request failed." });
+    }
+  }
+
+  // ---- Single-image features: homework tutor, schedule import, stats import ----
   if (isImageKind(kind)) {
-    const isSchedule = kind === "schedule-import";
-    const instruction = isSchedule ? scheduleInstruction(payload) : tutorInstruction(kind, payload);
+    const needsImage = kind === "schedule-import" || kind === "stats-import";
+    let instruction, system, wantJSON;
+    if (kind === "schedule-import") { instruction = scheduleInstruction(payload); system = SCHEDULE_SYSTEM; wantJSON = true; }
+    else if (kind === "stats-import") { instruction = statsInstruction(payload); system = STATS_SYSTEM; wantJSON = true; }
+    else { instruction = tutorInstruction(kind, payload); system = tutorSystem(payload.subject); wantJSON = kind !== "tutor-explain"; }
+
     const img = payload.image;
-    if (isSchedule && !img) {
-      return res.status(400).json({ error: "Add a photo of the schedule first." });
+    if (needsImage && !img) {
+      return res.status(400).json({ error: kind === "stats-import" ? "Add a screenshot of the stats first." : "Add a photo of the schedule first." });
     }
     if (!instruction || (!img && !(payload.question || "").trim())) {
       return res.status(400).json({ error: "Add a photo of the homework or type the question first." });
@@ -199,23 +270,20 @@ export default async function handler(req, res) {
 
     const content = [];
     if (img && img.data && img.mediaType) {
-      content.push({
-        type: "image",
-        source: { type: "base64", media_type: img.mediaType, data: img.data },
-      });
+      content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } });
     }
     content.push({ type: "text", text: instruction });
 
     try {
       const message = await client.messages.create({
         model: MODEL,
-        max_tokens: isSchedule ? 2000 : 1800,
-        system: [{ type: "text", text: isSchedule ? SCHEDULE_SYSTEM : tutorSystem(payload.subject), cache_control: { type: "ephemeral" } }],
+        max_tokens: 2000,
+        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content }],
       });
       const text = message.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
 
-      if (kind === "tutor-explain") return res.status(200).json({ text });
+      if (!wantJSON) return res.status(200).json({ text });
       const parsed = parseJSON(text);
       if (!parsed) return res.status(200).json({ text }); // fall back to showing the raw reply
       return res.status(200).json({ data: parsed });

@@ -589,6 +589,45 @@ body[data-view="calendar"] { --section: #38bdf8; }
 .sched-actions .btn-ghost { padding: 10px 18px; border: none; border-radius: 11px; font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
 .sched-success { color: #b6f0d8; background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.3); border-radius: var(--radius-sm); padding: 14px 16px; font-weight: 600; font-size: 14.5px; }
 
+/* ===== DASHBOARD DEEP-LINK CARDS ===== */
+.link-card { cursor: pointer; transition: border-color .15s, transform .12s, background .15s; }
+.link-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.link-card h3 { display: flex; align-items: center; justify-content: space-between; }
+.card-go { color: var(--muted); font-size: 18px; transition: transform .15s, color .15s; }
+.link-card:hover .card-go { color: var(--accent); transform: translateX(3px); }
+
+/* ===== STAT ANALYSIS + IMPORT (baseball / wrestling) ===== */
+.ai-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0 4px; }
+.stat-import-btn { padding: 10px 16px; border: none; border-radius: 11px; font: inherit; font-weight: 600; font-size: 13.5px; cursor: pointer; }
+.stat-import { margin-top: 14px; }
+.stat-import[hidden] { display: none; }
+.si-num { flex: 0 0 58px; text-align: center; padding-left: 6px; padding-right: 6px; }
+#si-baseball-result .sched-row, #si-wrestling-result .sched-row { gap: 7px; }
+
+/* ===== VIDEO ANALYZER ===== */
+.video-analyzer { margin-top: 18px; }
+.va-disc { display: inline-flex; gap: 6px; margin-bottom: 14px; background: var(--surface-2); padding: 4px; border-radius: 12px; border: 1px solid var(--border); }
+.va-disc-btn { background: none; border: none; color: var(--muted); font: inherit; font-weight: 600; font-size: 13.5px; padding: 8px 16px; border-radius: 9px; cursor: pointer; transition: background .15s, color .15s; }
+.va-disc-btn.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+.va-preview { display: block; width: 100%; max-height: 360px; border-radius: var(--radius-sm); background: #000; margin-top: 4px; }
+.video-analyzer button[id$="-go"], .stat-import button[id$="-scan"] {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border: none;
+  font: inherit; font-weight: 600; font-size: 14px; padding: 10px 18px; border-radius: 11px; cursor: pointer;
+  transition: filter .15s, transform .12s;
+}
+.video-analyzer button[id$="-go"]:hover, .stat-import button[id$="-scan"]:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.video-analyzer button[id$="-go"]:disabled, .stat-import button[id$="-scan"]:disabled { opacity: .55; cursor: progress; }
+.va-saved { margin-top: 18px; }
+.va-saved:empty { display: none; }
+.va-saved-title { font-family: "Space Grotesk", sans-serif; font-size: 14px; font-weight: 600; color: var(--muted); margin-bottom: 10px; }
+.va-saved .deck { margin-bottom: 10px; }
+.va-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 9px; flex: 0 0 auto; }
+.va-saved .deck-toggle { gap: 12px; }
+#si-baseball-result .si-add, #si-wrestling-result .si-add {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border: none;
+  font: inherit; font-weight: 600; font-size: 14px; padding: 10px 18px; border-radius: 11px; cursor: pointer;
+}
+
 /* scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }

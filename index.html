@@ -26,6 +26,7 @@
         <button class="nav-item" data-view="tutor"><span class="ic">📸</span> Homework Helper</button>
         <button class="nav-item" data-view="grades"><span class="ic">🎓</span> Grades</button>
         <button class="nav-item" data-view="sports"><span class="ic">⛰</span> Sports</button>
+        <button class="nav-item" data-view="track"><span class="ic">🏃</span> Track &amp; PV</button>
         <button class="nav-item" data-view="health"><span class="ic">❤</span> Health &amp; Workout</button>
         <button class="nav-item" data-view="nutrition"><span class="ic">🥗</span> Nutrition</button>
         <button class="nav-item" data-view="swing"><span class="ic">⚾</span> Swing Lab</button>
@@ -76,28 +77,28 @@
         <div class="stats" id="stats"></div>
 
         <div class="dash-grid">
-          <div class="card">
-            <h3>Next 3 days</h3>
+          <div class="card link-card" data-link="calendar">
+            <h3>Next 3 days <span class="card-go">›</span></h3>
             <ul class="mini-list" id="dash-agenda"></ul>
           </div>
-          <div class="card">
-            <h3>Due soon — school</h3>
+          <div class="card link-card" data-link="school">
+            <h3>Due soon — school <span class="card-go">›</span></h3>
             <ul class="mini-list" id="dash-school"></ul>
           </div>
-          <div class="card">
-            <h3>This week's training</h3>
+          <div class="card link-card" data-link="health">
+            <h3>This week's training <span class="card-go">›</span></h3>
             <ul class="mini-list" id="dash-workouts"></ul>
           </div>
-          <div class="card">
-            <h3>Open tasks</h3>
+          <div class="card link-card" data-link="tasks">
+            <h3>Open tasks <span class="card-go">›</span></h3>
             <ul class="mini-list" id="dash-tasks"></ul>
           </div>
-          <div class="card">
-            <h3>Today's lunch</h3>
+          <div class="card link-card" data-link="lunch">
+            <h3>Today's lunch <span class="card-go">›</span></h3>
             <div id="dash-lunch" class="lunch-mini"></div>
           </div>
-          <div class="card">
-            <h3>Streaks</h3>
+          <div class="card link-card" data-link="health">
+            <h3>Streaks <span class="card-go">›</span></h3>
             <div id="dash-streaks" class="streaks"></div>
           </div>
         </div>
@@ -121,6 +122,12 @@
           </label>
           <div class="import-controls" id="sched-controls" hidden>
             <input type="text" id="sched-note" class="sched-note" placeholder="Optional: sport or team (e.g. Avon Lake wrestling)">
+            <select id="sched-sport" class="sched-f" title="Link these events to a sport">
+              <option value="">No sport link</option>
+              <option value="baseball">Baseball</option>
+              <option value="wrestling">Wrestling</option>
+              <option value="track">Track / Pole Vault</option>
+            </select>
             <button type="button" id="sched-scan">Scan schedule</button>
             <button type="button" class="btn-ghost" id="sched-clear">Remove</button>
           </div>
@@ -284,6 +291,13 @@
             <button type="submit">Log match</button>
           </form>
           <div class="stats" id="wrestling-stats"></div>
+          <div class="ai-row">
+            <button type="button" class="ai-btn" id="wr-analyze">✨ Analyze my matches</button>
+            <button type="button" class="btn-ghost stat-import-btn" data-sport="wrestling">📷 Import stats from screenshot</button>
+          </div>
+          <div id="wr-analyze-out" class="ai-output"></div>
+          <div id="wr-stat-import" class="stat-import"></div>
+          <div class="card video-analyzer" id="va-wrestling"></div>
           <div class="list" id="wrestling-list"></div>
         </div>
 
@@ -300,7 +314,14 @@
             <button type="submit">Log game</button>
           </form>
           <div class="stats" id="baseball-stats"></div>
-          <p class="hint">Want to break down your mechanics? Head to the <strong>Swing Lab</strong> to upload a swing.</p>
+          <div class="ai-row">
+            <button type="button" class="ai-btn" id="bb-analyze">✨ Analyze my season</button>
+            <button type="button" class="btn-ghost stat-import-btn" data-sport="baseball">📷 Import stats from screenshot</button>
+          </div>
+          <div id="bb-analyze-out" class="ai-output"></div>
+          <div id="bb-stat-import" class="stat-import"></div>
+          <div class="card video-analyzer" id="va-baseball"></div>
+          <p class="hint">Prefer on-device metrics? The <button type="button" class="link-btn" data-view="swing">Swing Lab</button> tracks your body with no upload.</p>
           <div class="list" id="baseball-list"></div>
         </div>
 
@@ -339,6 +360,31 @@
           <div class="stats" id="golf-stats"></div>
           <div class="list" id="golf-list"></div>
         </div>
+      </section>
+
+      <!-- TRACK & POLE VAULT -->
+      <section class="view" id="view-track">
+        <div class="page-head">
+          <h1>Track &amp; Pole Vault</h1>
+          <p class="page-sub">Keep your meet schedule and personal records, and get AI technique feedback on your pole vault from a video.</p>
+        </div>
+
+        <div class="card">
+          <h3>Track schedule &amp; results</h3>
+          <form class="entry-form" id="track-form">
+            <input type="date" id="tr-date" required>
+            <input type="text" id="tr-meet" placeholder="Meet (e.g. League Championships)" required>
+            <input type="text" id="tr-event" placeholder="Event (e.g. Pole Vault, 100m)">
+            <input type="text" id="tr-mark" placeholder="Mark / result (e.g. 12'6&quot;, 11.8s)">
+            <input type="text" id="tr-notes" placeholder="Notes (opt)">
+            <button type="submit">Add</button>
+          </form>
+          <p class="hint">Tip: log your best vault height each meet to watch your PR climb. Importing a schedule photo on the <button type="button" class="link-btn" data-view="calendar">Calendar</button> can pre-fill your meets.</p>
+          <div class="stats" id="track-stats"></div>
+          <div class="list" id="track-list"></div>
+        </div>
+
+        <div class="card video-analyzer" id="va-track"></div>
       </section>
 
       <!-- HEALTH & WORKOUT -->

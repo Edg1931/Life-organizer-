@@ -9,6 +9,7 @@
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
     courses: [], finances: [], goals: [], templates: [], foods: [], events: [], decks: [],
+    track: [], analyses: [],
     settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0, calorieGoal: 2400, matchWeight: null, nextEvent: { name: "", date: "" } },
   };
 
@@ -449,7 +450,7 @@
   });
   document.querySelector(".content").addEventListener("change", (e) => {
     const chk = e.target.closest(".check");
-    if (chk) {
+    if (chk && chk.dataset.kind && data[chk.dataset.kind]) {
       const item = data[chk.dataset.kind].find((x) => x.id === chk.dataset.id);
       if (item) { item.done = chk.checked; save(); render(); }
     }
@@ -479,6 +480,8 @@
     renderNutrition();
     renderTasks();
     renderDecks();
+    renderTrack();
+    renderAnalyses();
     fillSettings();
   }
 
@@ -657,8 +660,10 @@
     el.innerHTML = items.length ? items.map((it) => {
       const meta = it.kind === "school" ? "School due" : it.kind === "game" ? "Game week" : esc(it.ref.type || "Event") + (it.ref.repeat === "weekly" ? " · weekly" : "");
       const timeStr = it.kind === "event" && it.ref.time ? fmtTime(it.ref.time) : "";
+      const sport = it.kind === "event" ? it.ref.sport : null;
+      const sportLink = sport ? `<button class="sport-link" data-sport="${esc(sport)}">${sport === "track" ? "Track & PV" : "Log stats"} ›</button>` : "";
       return `<div class="item"><div class="item-body"><div class="item-title">${esc(it.label)}</div>
-        <div class="item-sub"><span class="badge ${it.cls}">${meta}</span>${timeStr ? `<span>${timeStr}</span>` : ""}</div></div>
+        <div class="item-sub"><span class="badge ${it.cls}">${meta}</span>${timeStr ? `<span>${timeStr}</span>` : ""}${sportLink}</div></div>
         ${it.kind === "event" ? `<button class="del" data-kind="events" data-id="${it.ref.id}">×</button>` : ""}</div>`;
     }).join("") : `<div class="empty-state">Nothing scheduled. Add an event below.</div>`;
   }
@@ -1665,6 +1670,7 @@
       return;
     }
     if (!e.target.closest("#sched-add")) return;
+    const sport = document.getElementById("sched-sport").value;
     let added = 0;
     document.querySelectorAll(".sched-row").forEach((row) => {
       if (!row.querySelector(".sched-pick").checked) return;
@@ -1673,7 +1679,9 @@
       const title = row.querySelector(".sched-title").value.trim();
       const time = row.querySelector(".sched-time").value;
       const type = row.querySelector(".sched-type").value;
-      data.events.push({ id: uid(), title: title || type, date, time, type, repeat: "none" });
+      const ev = { id: uid(), title: title || type, date, time, type, repeat: "none" };
+      if (sport) ev.sport = sport;
+      data.events.push(ev);
       added++;
     });
     if (!added) return;
@@ -1684,11 +1692,403 @@
       `<div class="sched-success">✓ Added ${added} event${added > 1 ? "s" : ""} to your calendar.</div>`;
   });
 
-  // Jump links (e.g. "Homework Helper" from the School hint).
+  // ============ TRACK & POLE VAULT ============
+  document.getElementById("track-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!val("tr-date") || !val("tr-meet").trim()) return;
+    data.track.push({
+      id: uid(), date: val("tr-date"), meet: val("tr-meet").trim(),
+      event: val("tr-event").trim(), mark: val("tr-mark").trim(), notes: val("tr-notes").trim(),
+    });
+    save(); e.target.reset(); render();
+  });
+
+  function renderTrack() {
+    const list = document.getElementById("track-list");
+    if (!list) return;
+    const items = [...data.track].sort((a, b) => b.date.localeCompare(a.date));
+    const pv = items.filter((t) => /vault|\bpv\b/i.test(t.event || ""));
+    document.getElementById("track-stats").innerHTML =
+      statCard(items.length, "Entries") +
+      statCard(new Set(items.map((t) => t.meet)).size, "Meets") +
+      statCard(pv.length, "Pole vault marks");
+    list.innerHTML = items.length ? items.map((t) => `
+      <div class="item"><div class="item-body">
+        <div class="item-title">${esc(t.meet)}${t.event ? ` · ${esc(t.event)}` : ""}</div>
+        <div class="item-sub">${t.mark ? `<span class="badge">${esc(t.mark)}</span>` : ""}<span>${fmtDate(t.date)}</span>${t.notes ? `<span>· ${esc(t.notes)}</span>` : ""}</div></div>
+        <button class="del" data-kind="track" data-id="${t.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No meets logged yet. Add one above.</div>`;
+  }
+
+  // ============ SHARED VIDEO ANALYSIS ENGINE ============
+  const DISC_LABELS = { swing: "Swing", pitching: "Pitching", wrestling: "Wrestling", polevault: "Pole vault" };
+  const discLabel = (d) => DISC_LABELS[d] || "Video";
+
+  const VA_CONFIGS = {
+    baseball: { title: "AI video breakdown", hint: "Upload a clip of your at-bat or pitching delivery for coaching feedback. Film side-on with your whole body in frame — slow-motion is ideal.", disciplines: [{ value: "swing", label: "Swing / at-bat" }, { value: "pitching", label: "Pitching" }] },
+    wrestling: { title: "AI video breakdown", hint: "Upload a clip of a match, a shot, or a drill for coaching feedback. Keep your whole body in frame.", disciplines: [{ value: "wrestling", label: "Wrestling" }] },
+    track: { title: "Pole vault video analysis", hint: "Upload a side-on clip of your vault — approach through bar clearance. Slow-motion helps a lot.", disciplines: [{ value: "polevault", label: "Pole Vault" }] },
+  };
+  const lastVA = {}; // last unsaved analysis per analyzer key
+
+  function videoAnalyzerHTML(prefix, cfg) {
+    const disc = cfg.disciplines.length > 1
+      ? `<div class="va-disc" id="${prefix}-disc">${cfg.disciplines.map((d, i) => `<button type="button" class="va-disc-btn${i === 0 ? " active" : ""}" data-disc="${d.value}">${esc(d.label)}</button>`).join("")}</div>`
+      : "";
+    return `<h3>${esc(cfg.title)}</h3>
+      <p class="hint">${esc(cfg.hint)}</p>
+      ${disc}
+      <label class="photo-drop compact" id="${prefix}-drop">
+        <input type="file" id="${prefix}-file" accept="video/*">
+        <div class="photo-drop-empty">
+          <span class="photo-ic">🎥</span>
+          <span class="photo-label">Upload a video</span>
+          <span class="photo-hint">Side-on, full body in frame. Slow-mo is ideal.</span>
+        </div>
+      </label>
+      <video id="${prefix}-preview" class="va-preview" playsinline controls hidden></video>
+      <div class="import-controls" id="${prefix}-controls" hidden>
+        <input type="text" id="${prefix}-note" class="sched-note" placeholder="Optional: what should I focus on?">
+        <button type="button" id="${prefix}-go">Analyze with AI</button>
+        <button type="button" class="btn-ghost" id="${prefix}-clear">Remove</button>
+      </div>
+      <div id="${prefix}-out" class="tutor-output"></div>
+      <div id="${prefix}-saved" class="va-saved"></div>`;
+  }
+
+  function seekVideo(video, t) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (done) return; done = true; video.removeEventListener("seeked", finish); resolve(); };
+      video.addEventListener("seeked", finish);
+      try { video.currentTime = Math.min(t, Math.max(0, (video.duration || 0) - 0.05)); } catch { finish(); }
+      setTimeout(finish, 3000); // some browsers don't reliably fire "seeked"
+    });
+  }
+
+  function extractVideoFrames(file, count = 6, maxDim = 720) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const video = document.createElement("video");
+      video.preload = "auto"; video.muted = true; video.playsInline = true; video.src = url;
+      const fail = (msg) => { URL.revokeObjectURL(url); reject(new Error(msg)); };
+      video.addEventListener("error", () => fail("Couldn't read that video file."), { once: true });
+      video.addEventListener("loadedmetadata", async () => {
+        const dur = video.duration;
+        if (!dur || !isFinite(dur) || !video.videoWidth) { fail("Couldn't read that video file."); return; }
+        const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        const ctx = canvas.getContext("2d");
+        const frames = [];
+        try {
+          for (let i = 0; i < count; i++) {
+            await seekVideo(video, dur * ((i + 0.5) / count));
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames.push(canvas.toDataURL("image/jpeg", 0.8));
+          }
+        } catch { fail("Couldn't read frames from that video."); return; }
+        URL.revokeObjectURL(url);
+        resolve(frames);
+      }, { once: true });
+    });
+  }
+
+  function makeThumb(dataUrl, max = 360, q = 0.6) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", q));
+      };
+      img.onerror = () => resolve("");
+      img.src = dataUrl;
+    });
+  }
+
+  function setupVideoAnalyzer(key) {
+    const root = document.getElementById("va-" + key);
+    const cfg = VA_CONFIGS[key];
+    if (!root || !cfg) return;
+    const prefix = "va-" + key;
+    root.innerHTML = videoAnalyzerHTML(prefix, cfg);
+    const $ = (s) => document.getElementById(prefix + s);
+    let file = null;
+    let disc = cfg.disciplines[0].value;
+
+    if (cfg.disciplines.length > 1) {
+      $("-disc").addEventListener("click", (e) => {
+        const b = e.target.closest(".va-disc-btn");
+        if (!b) return;
+        disc = b.dataset.disc;
+        root.querySelectorAll(".va-disc-btn").forEach((x) => x.classList.toggle("active", x === b));
+      });
+    }
+
+    $("-file").addEventListener("change", (e) => {
+      file = e.target.files[0] || null;
+      if (!file) return;
+      const v = $("-preview");
+      v.src = URL.createObjectURL(file); v.hidden = false;
+      $("-drop").hidden = true;
+      $("-controls").hidden = false;
+      $("-out").innerHTML = "";
+    });
+
+    $("-clear").addEventListener("click", () => {
+      file = null; $("-file").value = "";
+      const v = $("-preview"); v.removeAttribute("src"); v.load(); v.hidden = true;
+      $("-drop").hidden = false; $("-controls").hidden = true; $("-out").innerHTML = "";
+    });
+
+    $("-go").addEventListener("click", async () => {
+      if (!file) return;
+      const out = $("-out"), btn = $("-go");
+      btn.disabled = true;
+      out.innerHTML = `<div class="tutor-loading"><span class="spinner"></span>Pulling frames and analyzing your ${esc(discLabel(disc).toLowerCase())}…</div>`;
+      try {
+        const dataUrls = await extractVideoFrames(file);
+        if (!dataUrls.length) throw new Error("Couldn't read frames from that video.");
+        const frames = dataUrls.map((u) => ({ mediaType: "image/jpeg", data: u.split(",")[1] }));
+        const note = $("-note").value.trim();
+        const json = await aiCallFull("video-analyze", { discipline: disc, note, frames });
+        const text = json.text || "No feedback returned — try a clearer clip.";
+        const thumb = await makeThumb(dataUrls[Math.floor(dataUrls.length / 2)]);
+        lastVA[key] = { discipline: disc, note, feedback: text, thumb };
+        const d = document.createElement("div"); d.className = "ai-output"; d.textContent = text;
+        out.innerHTML = `<div class="result-head"><h4 class="result-title">${esc(discLabel(disc))} breakdown</h4><button type="button" class="btn-ghost" data-va-save="${key}">＋ Save analysis</button></div>`;
+        out.appendChild(d);
+      } catch (err) {
+        out.innerHTML = `<div class="tutor-error">${esc(aiErrorText(err))}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function saveAnalysis(key) {
+    const a = lastVA[key];
+    if (!a) return;
+    data.analyses.push({ id: uid(), discipline: a.discipline, label: a.note || discLabel(a.discipline), date: todayISO(), thumb: a.thumb, feedback: a.feedback });
+    save(); renderAnalyses();
+  }
+
+  function renderAnalyses() {
+    Object.keys(VA_CONFIGS).forEach((key) => {
+      const el = document.getElementById("va-" + key + "-saved");
+      if (!el) return;
+      const vals = VA_CONFIGS[key].disciplines.map((d) => d.value);
+      const items = data.analyses.filter((a) => vals.includes(a.discipline)).sort((a, b) => b.date.localeCompare(a.date));
+      el.innerHTML = !items.length ? "" : `<h4 class="va-saved-title">Saved breakdowns</h4>` + items.map((a) => `
+        <div class="deck">
+          <div class="deck-header">
+            <button type="button" class="deck-toggle va-saved-toggle" data-id="${a.id}">
+              ${a.thumb ? `<img class="va-thumb" src="${a.thumb}" alt="">` : ""}
+              <span class="deck-name">${esc(a.label || discLabel(a.discipline))}</span>
+              <span class="deck-meta">${esc(discLabel(a.discipline))} · ${fmtDate(a.date)}</span>
+              <span class="deck-caret">›</span>
+            </button>
+            <button type="button" class="del va-del" data-kind="analyses" data-id="${a.id}" title="Delete">×</button>
+          </div>
+          <div class="deck-body" id="va-body-${a.id}" hidden></div>
+        </div>`).join("");
+      // fill feedback as text (avoids HTML injection while keeping line breaks via CSS)
+      items.forEach((a) => {
+        const body = document.getElementById("va-body-" + a.id);
+        if (body) { const d = document.createElement("div"); d.className = "ai-output"; d.textContent = a.feedback; body.appendChild(d); }
+      });
+    });
+  }
+
+  // ============ STATS SCREENSHOT IMPORT (baseball / wrestling) ============
+  function statImporterHTML(prefix) {
+    return `<label class="photo-drop compact" id="${prefix}-drop">
+        <input type="file" id="${prefix}-file" accept="image/*" capture="environment">
+        <div class="photo-drop-empty">
+          <span class="photo-ic">🧾</span>
+          <span class="photo-label">Upload stats screenshot</span>
+          <span class="photo-hint">A GameChanger box score or season screen works great</span>
+        </div>
+        <img id="${prefix}-preview" class="photo-preview" alt="Stats preview" hidden>
+      </label>
+      <div class="import-controls" id="${prefix}-controls" hidden>
+        <button type="button" id="${prefix}-scan">Read stats</button>
+        <button type="button" class="btn-ghost" id="${prefix}-clear">Remove</button>
+      </div>
+      <div id="${prefix}-result" class="sched-result"></div>`;
+  }
+
+  function setupStatImport(sport) {
+    const container = document.getElementById(sport === "baseball" ? "bb-stat-import" : "wr-stat-import");
+    if (!container) return;
+    const prefix = "si-" + sport;
+    container.innerHTML = statImporterHTML(prefix);
+    container.hidden = true;
+    const $ = (s) => document.getElementById(prefix + s);
+    let image = null;
+
+    $("-file").addEventListener("change", async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try {
+        const dataUrl = await resizePhoto(f, 1600, 0.85);
+        image = { mediaType: "image/jpeg", data: dataUrl.split(",")[1] };
+        const p = $("-preview"); p.src = dataUrl; p.hidden = false;
+        $("-drop").querySelector(".photo-drop-empty").hidden = true;
+        $("-drop").classList.add("has-photo");
+        $("-controls").hidden = false;
+      } catch { alert("Couldn't read that image. Try another."); }
+    });
+
+    $("-clear").addEventListener("click", () => {
+      image = null; $("-file").value = "";
+      const p = $("-preview"); p.src = ""; p.hidden = true;
+      $("-drop").querySelector(".photo-drop-empty").hidden = false;
+      $("-drop").classList.remove("has-photo");
+      $("-controls").hidden = true; $("-result").innerHTML = "";
+    });
+
+    $("-scan").addEventListener("click", async () => {
+      if (!image) return;
+      const out = $("-result"), btn = $("-scan");
+      btn.disabled = true;
+      out.innerHTML = `<div class="tutor-loading"><span class="spinner"></span>Reading the stats…</div>`;
+      try {
+        const json = await aiCallFull("stats-import", { sport, today: todayISO(), image });
+        const rows = sport === "baseball"
+          ? (json.data && Array.isArray(json.data.games) ? json.data.games : [])
+          : (json.data && Array.isArray(json.data.matches) ? json.data.matches : []);
+        renderStatReview(sport, out, rows);
+      } catch (err) {
+        out.innerHTML = `<div class="tutor-error">${esc(aiErrorText(err))}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    $("-result").addEventListener("click", (e) => {
+      if (e.target.closest(".si-cancel")) { $("-result").innerHTML = ""; return; }
+      if (!e.target.closest(".si-add")) return;
+      let added = 0;
+      document.querySelectorAll(`#${prefix}-result .sched-row`).forEach((row) => {
+        if (!row.querySelector(".si-pick").checked) return;
+        const get = (c) => { const el = row.querySelector("." + c); return el ? el.value : ""; };
+        const date = get("si-date");
+        if (!date) return;
+        if (sport === "baseball") {
+          data.baseball.push({ id: uid(), date, opponent: get("si-opp").trim(),
+            ab: parseInt(get("si-ab"), 10) || 0, h: parseInt(get("si-h"), 10) || 0, rbi: parseInt(get("si-rbi"), 10) || 0,
+            r: parseInt(get("si-r"), 10) || 0, bb: parseInt(get("si-bb"), 10) || 0, k: parseInt(get("si-k"), 10) || 0 });
+        } else {
+          data.wrestling.push({ id: uid(), date, opponent: get("si-opp").trim() || "Opponent", event: "",
+            result: get("si-result"), method: get("si-method"), score: get("si-score").trim(), notes: "" });
+        }
+        added++;
+      });
+      if (!added) return;
+      save(); render();
+      const noun = sport === "baseball" ? (added > 1 ? "games" : "game") : (added > 1 ? "matches" : "match");
+      $("-result").innerHTML = `<div class="sched-success">✓ Added ${added} ${noun} to ${sport}.</div>`;
+    });
+  }
+
+  function renderStatReview(sport, out, rows) {
+    const valid = (rows || []).filter((r) => r && r.date);
+    if (!valid.length) {
+      out.innerHTML = `<div class="tutor-error">Couldn't read any stats. Try a clearer, straight-on screenshot.</div>`;
+      return;
+    }
+    const methodOpts = ["Decision", "Major", "Tech", "Pin", "Forfeit"];
+    const rowsHTML = valid.map((r) => {
+      if (sport === "baseball") {
+        const n = (k) => Number.isFinite(+r[k]) ? +r[k] : 0;
+        return `<div class="sched-row">
+          <input type="checkbox" class="check si-pick" checked>
+          <input type="date" class="sched-f si-date" value="${esc(r.date)}">
+          <input type="text" class="sched-f si-opp" value="${esc(r.opponent || "")}" placeholder="Opp">
+          <input type="number" class="sched-f si-num si-ab" value="${n("ab")}" title="AB">
+          <input type="number" class="sched-f si-num si-h" value="${n("h")}" title="H">
+          <input type="number" class="sched-f si-num si-rbi" value="${n("rbi")}" title="RBI">
+          <input type="number" class="sched-f si-num si-r" value="${n("r")}" title="R">
+          <input type="number" class="sched-f si-num si-bb" value="${n("bb")}" title="BB">
+          <input type="number" class="sched-f si-num si-k" value="${n("k")}" title="K">
+        </div>`;
+      }
+      const result = r.result === "Loss" ? "Loss" : "Win";
+      const method = methodOpts.includes(r.method) ? r.method : "Decision";
+      return `<div class="sched-row">
+        <input type="checkbox" class="check si-pick" checked>
+        <input type="date" class="sched-f si-date" value="${esc(r.date)}">
+        <input type="text" class="sched-f si-opp" value="${esc(r.opponent || "")}" placeholder="Opp">
+        <select class="sched-f si-result"><option${result === "Win" ? " selected" : ""}>Win</option><option${result === "Loss" ? " selected" : ""}>Loss</option></select>
+        <select class="sched-f si-method">${methodOpts.map((m) => `<option${m === method ? " selected" : ""}>${m}</option>`).join("")}</select>
+        <input type="text" class="sched-f si-score" value="${esc(r.score || "")}" placeholder="Score">
+      </div>`;
+    }).join("");
+    const cols = sport === "baseball" ? " (date, opponent, then AB · H · RBI · R · BB · K)" : "";
+    out.innerHTML = `<div class="sched-review">
+      <p class="sched-review-head"><strong>${valid.length}</strong> ${sport === "baseball" ? "game" : "match"}${valid.length > 1 ? "s" : ""} found${cols} — uncheck or fix any, then add.</p>
+      <div class="sched-rows">${rowsHTML}</div>
+      <div class="sched-actions"><button type="button" class="si-add" id="${"si-" + sport}-add-btn">Add to ${sport}</button><button type="button" class="btn-ghost si-cancel">Cancel</button></div>
+    </div>`;
+  }
+
+  // ============ STAT ANALYSIS BUTTONS (text AI) ============
+  async function runStatAnalysis(kind, payload, outId, btnId) {
+    const out = document.getElementById(outId), btn = document.getElementById(btnId);
+    btn.disabled = true; out.textContent = "Thinking…";
+    try { out.textContent = await aiCall(kind, payload); }
+    catch (e) { out.textContent = aiErrorText(e); }
+    finally { btn.disabled = false; }
+  }
+  document.getElementById("bb-analyze").addEventListener("click", () => {
+    if (!data.baseball.length) { document.getElementById("bb-analyze-out").textContent = "Log a game or two first, then I can break down your hitting."; return; }
+    runStatAnalysis("baseball-analysis", { games: data.baseball.slice(-20) }, "bb-analyze-out", "bb-analyze");
+  });
+  document.getElementById("wr-analyze").addEventListener("click", () => {
+    if (!data.wrestling.length) { document.getElementById("wr-analyze-out").textContent = "Log a match or two first, then I can break down how you're wrestling."; return; }
+    runStatAnalysis("wrestling-analysis", { matches: data.wrestling.slice(-20) }, "wr-analyze-out", "wr-analyze");
+  });
+
+  // jump to a sport's section (used by calendar event links)
+  function goToSport(sport) {
+    if (sport === "track") { showView("track"); return; }
+    showView("sports");
+    const sub = sport === "wrestling" ? "wrestling" : sport === "baseball" ? "baseball" : null;
+    if (sub) {
+      document.querySelectorAll(".subtab").forEach((b) => b.classList.toggle("active", b.dataset.sub === sub));
+      document.querySelectorAll(".subview").forEach((v) => v.classList.remove("active"));
+      const el = document.getElementById("sub-" + sub);
+      if (el) el.classList.add("active");
+    }
+  }
+
+  // ============ CONSOLIDATED CONTENT CLICKS (links, deep-links, saves) ============
   document.querySelector(".content").addEventListener("click", (e) => {
     const lb = e.target.closest(".link-btn[data-view]");
-    if (lb) showView(lb.dataset.view);
+    if (lb) { showView(lb.dataset.view); return; }
+    const sl = e.target.closest(".sport-link[data-sport]");
+    if (sl) { goToSport(sl.dataset.sport); return; }
+    const card = e.target.closest(".link-card[data-link]");
+    if (card) { showView(card.dataset.link); return; }
+    const saveBtn = e.target.closest("[data-va-save]");
+    if (saveBtn) { saveAnalysis(saveBtn.dataset.vaSave); saveBtn.textContent = "✓ Saved"; saveBtn.disabled = true; return; }
+    const vaToggle = e.target.closest(".va-saved-toggle");
+    if (vaToggle) { const b = document.getElementById("va-body-" + vaToggle.dataset.id); if (b) b.hidden = !b.hidden; vaToggle.classList.toggle("open"); return; }
+    const si = e.target.closest(".stat-import-btn");
+    if (si) {
+      const c = document.getElementById(si.dataset.sport === "baseball" ? "bb-stat-import" : "wr-stat-import");
+      if (c) c.hidden = !c.hidden;
+    }
   });
+
+  // ---- one-time setup of the dynamic widgets ----
+  ["baseball", "wrestling", "track"].forEach(setupVideoAnalyzer);
+  ["baseball", "wrestling"].forEach(setupStatImport);
 
   document.body.dataset.view = "dashboard";
   render();
