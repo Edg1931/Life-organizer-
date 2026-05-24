@@ -7,7 +7,7 @@
 
   const blank = {
     workouts: [], school: [], tasks: [],
-    wrestling: [], baseball: [], checkins: [],
+    wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
     settings: { lunchUrl: "", name: "", aiBase: "" },
   };
 
@@ -159,6 +159,45 @@
     save(); bbForm.reset(); document.getElementById("bb-date").value = todayISO(); render();
   });
 
+  // Football
+  const fbForm = document.getElementById("football-form");
+  document.getElementById("fb-date").value = todayISO();
+  fbForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.football.push({
+      id: uid(), date: val("fb-date"), opponent: val("fb-opponent"), result: val("fb-result"),
+      td: int("fb-td"), yards: int("fb-yards"), tackles: int("fb-tackles"), notes: val("fb-notes"),
+    });
+    save(); fbForm.reset(); document.getElementById("fb-date").value = todayISO(); render();
+  });
+
+  // Golf
+  const gfForm = document.getElementById("golf-form");
+  document.getElementById("gf-date").value = todayISO();
+  gfForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.golf.push({
+      id: uid(), date: val("gf-date"), course: val("gf-course"), holes: int("gf-holes") || 18,
+      score: int("gf-score"), par: int("gf-par") || 0, putts: num("gf-putts"),
+    });
+    save(); gfForm.reset(); document.getElementById("gf-date").value = todayISO(); render();
+  });
+
+  // Strength / lifts
+  const lfForm = document.getElementById("lift-form");
+  document.getElementById("lf-date").value = todayISO();
+  lfForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.lifts.push({
+      id: uid(), date: val("lf-date"), exercise: val("lf-exercise").trim(),
+      weight: num("lf-weight") || 0, reps: int("lf-reps") || 0, sets: int("lf-sets") || 1,
+    });
+    save(); lfForm.reset();
+    document.getElementById("lf-date").value = todayISO();
+    document.getElementById("lf-sets").value = 1;
+    render();
+  });
+
   // Settings forms
   document.getElementById("lunch-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -228,6 +267,9 @@
     renderHealth();
     renderWrestling();
     renderBaseball();
+    renderFootball();
+    renderGolf();
+    renderLifts();
     renderTasks();
     fillSettings();
   }
@@ -405,6 +447,85 @@
       : `<div class="empty-state">No games logged yet.</div>`;
   }
 
+  function renderFootball() {
+    const items = [...data.football].sort((a, b) => b.date.localeCompare(a.date));
+    const sum = (f) => items.reduce((s, g) => s + (g[f] || 0), 0);
+    const wins = items.filter((g) => g.result === "Win").length;
+    const losses = items.filter((g) => g.result === "Loss").length;
+    document.getElementById("football-stats").innerHTML =
+      statCard(`${wins}<small>-${losses}</small>`, "Record") +
+      statCard(sum("td"), "Touchdowns") +
+      statCard(sum("yards"), "Total yards") +
+      statCard(sum("tackles"), "Tackles");
+    const el = document.getElementById("football-list");
+    el.innerHTML = items.length ? items.map((g) => `
+      <div class="item ${g.result ? g.result.toLowerCase() : ""}"><div class="item-body">
+        <div class="item-title">${fmtDate(g.date)}${g.opponent ? ` vs ${esc(g.opponent)}` : ""}</div>
+        <div class="item-sub"><span class="badge ${g.result === "Win" ? "win" : g.result === "Loss" ? "loss" : ""}">${esc(g.result || "")}</span>
+        ${g.td ? `<span>${g.td} TD</span>` : ""}${g.yards ? `<span>${g.yards} yds</span>` : ""}${g.tackles ? `<span>${g.tackles} tackles</span>` : ""}
+        ${g.notes ? `<span>· ${esc(g.notes)}</span>` : ""}</div></div>
+        <button class="del" data-kind="football" data-id="${g.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No football games logged yet.</div>`;
+  }
+
+  function renderGolf() {
+    const items = [...data.golf].sort((a, b) => b.date.localeCompare(a.date));
+    const scored = items.filter((r) => r.score);
+    const best = scored.length ? Math.min(...scored.map((r) => r.score)) : null;
+    const avg = scored.length ? scored.reduce((s, r) => s + r.score, 0) / scored.length : null;
+    const toPar = scored.filter((r) => r.par);
+    const avgPar = toPar.length ? toPar.reduce((s, r) => s + (r.score - r.par), 0) / toPar.length : null;
+    const fmtPar = (v) => (v == null ? "–" : v === 0 ? "E" : v > 0 ? `+${Math.round(v)}` : `${Math.round(v)}`);
+    document.getElementById("golf-stats").innerHTML =
+      statCard(items.length, "Rounds") +
+      statCard(best != null ? best : "–", "Best score") +
+      statCard(avg != null ? avg.toFixed(1) : "–", "Avg score") +
+      statCard(fmtPar(avgPar), "Avg vs par");
+    const el = document.getElementById("golf-list");
+    el.innerHTML = items.length ? items.map((r) => {
+      const tp = r.par ? r.score - r.par : null;
+      return `<div class="item"><div class="item-body">
+        <div class="item-title">${esc(r.course || "Round")} · ${fmtDate(r.date)}</div>
+        <div class="item-sub"><span class="badge">${r.holes} holes</span>
+        ${r.score ? `<span>${r.score} strokes</span>` : ""}${tp != null ? `<span>${fmtPar(tp)}</span>` : ""}
+        ${r.putts != null ? `<span>${r.putts} putts</span>` : ""}</div></div>
+        <button class="del" data-kind="golf" data-id="${r.id}">×</button></div>`;
+    }).join("") : `<div class="empty-state">No rounds logged yet.</div>`;
+  }
+
+  function renderLifts() {
+    const items = [...data.lifts].sort((a, b) => b.date.localeCompare(a.date));
+    // personal records per exercise
+    const byEx = {};
+    data.lifts.forEach((l) => {
+      const key = l.exercise.toLowerCase();
+      const oneRm = l.weight * (1 + (l.reps || 0) / 30); // Epley estimate
+      if (!byEx[key]) byEx[key] = { name: l.exercise, maxWeight: 0, bestSet: null, oneRm: 0 };
+      const e = byEx[key];
+      if (l.weight > e.maxWeight) { e.maxWeight = l.weight; e.bestSet = l; e.name = l.exercise; }
+      if (oneRm > e.oneRm) e.oneRm = oneRm;
+    });
+    const prs = Object.values(byEx).sort((a, b) => b.oneRm - a.oneRm);
+    const prEl = document.getElementById("lift-prs");
+    prEl.innerHTML = prs.length ? prs.map((e) => `
+      <div class="pr-card">
+        <div class="pr-name">${esc(e.name)}</div>
+        <div class="pr-val">${trimNum(e.maxWeight)}<small> lb × ${e.bestSet.reps}</small></div>
+        <div class="pr-sub">est. 1RM ${trimNum(Math.round(e.oneRm))} lb</div>
+      </div>`).join("") : `<div class="empty-state">Log a lift to start tracking PRs.</div>`;
+
+    const el = document.getElementById("lift-list");
+    el.innerHTML = items.length ? items.map((l) => `
+      <div class="item"><div class="item-body">
+        <div class="item-title">${esc(l.exercise)}</div>
+        <div class="item-sub"><span class="badge">${trimNum(l.weight)} lb</span>
+        <span>${l.sets}×${l.reps}</span><span>${fmtDate(l.date)}</span></div></div>
+        <button class="del" data-kind="lifts" data-id="${l.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No lifts logged yet.</div>`;
+  }
+
+  const trimNum = (n) => (Math.round(n * 10) / 10).toString().replace(/\.0$/, "");
+
   function renderTasks() {
     const el = document.getElementById("task-list");
     const items = [...data.tasks].sort((a, b) => (a.done - b.done) || (a.due || "9999").localeCompare(b.due || "9999"));
@@ -533,6 +654,9 @@
       checkins: data.checkins.slice(-14),
       wrestling: data.wrestling.slice(-10),
       baseball: data.baseball.slice(-10),
+      football: data.football.slice(-10),
+      golf: data.golf.slice(-10),
+      lifts: data.lifts.slice(-20),
       openSchool: data.school.filter((s) => !s.done),
     };
   }

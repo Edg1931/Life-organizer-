@@ -107,7 +107,9 @@
         <div class="page-head"><h1>Sports</h1></div>
         <div class="subtabs" id="sports-subtabs">
           <button class="subtab active" data-sub="wrestling">Wrestling</button>
+          <button class="subtab" data-sub="football">Football</button>
           <button class="subtab" data-sub="baseball">Baseball</button>
+          <button class="subtab" data-sub="golf">Golf</button>
         </div>
 
         <div class="subview active" id="sub-wrestling">
@@ -149,6 +151,42 @@
           <div class="stats" id="baseball-stats"></div>
           <p class="hint">Want to break down your mechanics? Head to the <strong>Swing Lab</strong> to upload a swing.</p>
           <div class="list" id="baseball-list"></div>
+        </div>
+
+        <div class="subview" id="sub-football">
+          <form class="entry-form" id="football-form">
+            <input type="date" id="fb-date" required>
+            <input type="text" id="fb-opponent" placeholder="Opponent">
+            <select id="fb-result">
+              <option value="Win">Win</option>
+              <option value="Loss">Loss</option>
+              <option value="Tie">Tie</option>
+            </select>
+            <input type="number" id="fb-td" placeholder="TDs" min="0">
+            <input type="number" id="fb-yards" placeholder="Yards" min="0">
+            <input type="number" id="fb-tackles" placeholder="Tackles" min="0">
+            <input type="text" id="fb-notes" placeholder="Notes / position / other stats">
+            <button type="submit">Log game</button>
+          </form>
+          <div class="stats" id="football-stats"></div>
+          <div class="list" id="football-list"></div>
+        </div>
+
+        <div class="subview" id="sub-golf">
+          <form class="entry-form" id="golf-form">
+            <input type="date" id="gf-date" required>
+            <input type="text" id="gf-course" placeholder="Course">
+            <select id="gf-holes">
+              <option value="18">18 holes</option>
+              <option value="9">9 holes</option>
+            </select>
+            <input type="number" id="gf-score" placeholder="Score (strokes)" min="1">
+            <input type="number" id="gf-par" placeholder="Par" min="1">
+            <input type="number" id="gf-putts" placeholder="Putts (opt)" min="0">
+            <button type="submit">Log round</button>
+          </form>
+          <div class="stats" id="golf-stats"></div>
+          <div class="list" id="golf-list"></div>
         </div>
       </section>
 
@@ -213,6 +251,22 @@
         <div class="card">
           <h3>Training volume — last 8 weeks</h3>
           <div id="volume-chart" class="chart"></div>
+        </div>
+
+        <div class="card">
+          <h3>Strength log</h3>
+          <form class="entry-form" id="lift-form">
+            <input type="text" id="lf-exercise" placeholder="Exercise (e.g. Bench Press)" required>
+            <input type="number" step="0.5" id="lf-weight" placeholder="Weight (lb)" min="0" required>
+            <input type="number" id="lf-reps" placeholder="Reps" min="1" required>
+            <input type="number" id="lf-sets" placeholder="Sets" min="1" value="1">
+            <input type="date" id="lf-date" required>
+            <button type="submit">Log lift</button>
+          </form>
+          <h4 class="sub-h">Personal records</h4>
+          <div id="lift-prs" class="pr-grid"></div>
+          <h4 class="sub-h">History</h4>
+          <div class="list" id="lift-list"></div>
         </div>
 
         <div class="card">
