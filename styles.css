@@ -17,8 +17,8 @@
   --section: var(--accent);
   --radius: 20px;
   --radius-sm: 12px;
-  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  --glow: 0 0 0 1px rgba(255,255,255,.05), 0 20px 60px rgba(91,140,255,.10);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+  --glow: 0 0 0 1px rgba(255,255,255,.04), 0 14px 40px rgba(91,140,255,.08);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -39,14 +39,14 @@ body::before {
   content: "";
   position: fixed;
   inset: -20% -10% auto -10%;
-  height: 75vh;
+  height: 58vh;
   z-index: -2;
   background:
-    radial-gradient(45% 50% at 18% 20%, rgba(91,140,255,.35), transparent 70%),
-    radial-gradient(40% 45% at 82% 12%, rgba(168,85,247,.30), transparent 70%),
-    radial-gradient(35% 40% at 60% 40%, rgba(34,211,238,.18), transparent 70%);
-  filter: blur(20px);
-  animation: drift 18s ease-in-out infinite alternate;
+    radial-gradient(45% 50% at 18% 18%, rgba(91,140,255,.20), transparent 70%),
+    radial-gradient(40% 45% at 84% 10%, rgba(168,85,247,.16), transparent 70%),
+    radial-gradient(35% 40% at 62% 38%, rgba(34,211,238,.10), transparent 70%);
+  filter: blur(26px);
+  animation: drift 22s ease-in-out infinite alternate;
 }
 body::after {
   content: "";
@@ -145,11 +145,13 @@ body[data-view="grades"]  { --section: #818cf8; }
   background: linear-gradient(135deg, rgba(91,140,255,.14), rgba(168,85,247,.08)), var(--surface);
   box-shadow: var(--glow), var(--shadow);
 }
-.card.glow::after {
-  content: ""; position: absolute; inset: 0; border-radius: var(--radius); pointer-events: none;
-  background: radial-gradient(60% 80% at 100% 0%, rgba(168,85,247,.16), transparent 60%);
-}
 .brief-text { font-size: 16px; line-height: 1.65; position: relative; z-index: 1; }
+
+/* LUNCH EMBED */
+.lunch-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.lunch-bar .hint { margin: 0; }
+.lunch-frame { width: 100%; height: 72vh; min-height: 460px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; }
+.lunch-link { color: var(--accent); font-weight: 600; }
 
 /* STATS */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }

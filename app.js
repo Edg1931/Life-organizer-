@@ -220,7 +220,8 @@
     e.preventDefault();
     data.settings.lunchUrl = val("lunch-url").trim();
     save();
-    document.getElementById("lunch-save-status").textContent = data.settings.lunchUrl ? "Saved. Open the Lunch tab to see today's menu." : "Cleared.";
+    document.getElementById("lunch-save-status").textContent = "Saved. Open the Lunch tab to see the menu.";
+    if (document.body.dataset.view === "lunch") loadLunch();
   });
   document.getElementById("name-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -654,75 +655,41 @@
   }
 
   // ============ LUNCH ============
-  // Convert a pasted Nutrislice front-end URL into its public weekly-menu API URL for a date.
-  function nutrisliceApi(url, date) {
+  // Avon Lake City Schools uses Health-e Pro. We embed the live menu directly.
+  const DEFAULT_LUNCH_URL = "https://menus.healthepro.com/organizations/79/sites/640/menus/100481?calendarView=month&date=2026-05-01#today";
+
+  function lunchUrl() { return data.settings.lunchUrl || DEFAULT_LUNCH_URL; }
+
+  // Point the menu at the current month and jump to today.
+  function buildMenuUrl(raw) {
     try {
-      const u = new URL(url);
-      if (!u.hostname.endsWith("nutrislice.com")) return null;
-      const parts = u.pathname.split("/").filter(Boolean); // e.g. ["menu","school-slug","lunch", ...]
-      const mi = parts.findIndex((p) => p === "menu" || p === "menus");
-      if (mi === -1 || parts.length < mi + 3) return null;
-      const school = parts[mi + 1];
-      const type = parts[mi + 2];
-      const [y, m, d] = date.split("-");
-      return `${u.protocol}//${u.hostname}/menu/api/weeks/school/${school}/menu-type/${type}/${y}/${m}/${d}/`;
-    } catch { return null; }
+      const u = new URL(raw);
+      if (u.hostname.includes("healthepro.com")) {
+        const now = new Date();
+        const first = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+        u.searchParams.set("calendarView", "month");
+        u.searchParams.set("date", first);
+        u.hash = "today";
+        return u.toString();
+      }
+      return raw;
+    } catch { return raw; }
   }
 
-  function extractDishes(json, date) {
-    const day = (json.days || []).find((d) => d.date === date);
-    if (!day) return [];
-    return (day.menu_items || [])
-      .filter((it) => it.food && it.food.name)
-      .map((it) => it.food.name);
-  }
-
-  let lunchCache = { date: null, dishes: null, error: null };
-
-  async function fetchLunch() {
-    const date = todayISO();
-    if (lunchCache.date === date) return lunchCache;
-    lunchCache = { date, dishes: null, error: null };
-    if (!data.settings.lunchUrl) { lunchCache.error = "no-url"; return lunchCache; }
-    const api = nutrisliceApi(data.settings.lunchUrl, date);
-    if (!api) { lunchCache.error = "bad-url"; return lunchCache; }
-    try {
-      const res = await fetch(api, { headers: { Accept: "application/json" } });
-      if (!res.ok) throw new Error("http " + res.status);
-      const json = await res.json();
-      lunchCache.dishes = extractDishes(json, date);
-    } catch (e) {
-      lunchCache.error = "fetch";
-    }
-    return lunchCache;
-  }
-
-  async function loadLunch() {
+  function loadLunch() {
     const el = document.getElementById("lunch-content");
-    el.innerHTML = `<p class="hint">Loading today's menu…</p>`;
-    const r = await fetchLunch();
-    if (r.error === "no-url") {
-      el.innerHTML = `<h3>Today's lunch</h3><p class="hint">No menu connected yet. Add your school's Nutrislice link in <strong>Settings</strong> to see the daily menu here.</p>`;
-    } else if (r.error === "bad-url") {
-      el.innerHTML = `<h3>Today's lunch</h3><p class="hint">That link doesn't look like a Nutrislice menu URL. Check it in Settings.</p>`;
-    } else if (r.error === "fetch") {
-      el.innerHTML = `<h3>Today's lunch</h3><p class="hint">Couldn't reach the menu automatically (the school's site may block outside requests — we'll fix this when the backend is added). <a href="${esc(data.settings.lunchUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">Open the menu directly →</a></p>`;
-    } else if (!r.dishes || !r.dishes.length) {
-      el.innerHTML = `<h3>Today's lunch</h3><p class="hint">No items listed for today (could be a weekend or holiday). <a href="${esc(data.settings.lunchUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View full menu →</a></p>`;
-    } else {
-      el.innerHTML = `<h3>Today's lunch — ${fmtDate(todayISO())}</h3>` +
-        r.dishes.map((d) => `<div class="dish">• ${esc(d)}</div>`).join("");
-    }
+    const url = buildMenuUrl(lunchUrl());
+    el.innerHTML = `
+      <div class="lunch-bar">
+        <span class="hint">This month's menu, live from your school. If the box is blank, tap "Open full menu".</span>
+        <a class="ai-btn" href="${esc(url)}" target="_blank" rel="noopener">Open full menu ↗</a>
+      </div>
+      <iframe class="lunch-frame" src="${esc(url)}" title="School lunch menu" loading="lazy"></iframe>`;
   }
 
   function renderDashLunch() {
     const el = document.getElementById("dash-lunch");
-    if (!data.settings.lunchUrl) { el.innerHTML = `<span class="empty">Connect a menu in Settings.</span>`; return; }
-    if (lunchCache.date === todayISO() && lunchCache.dishes && lunchCache.dishes.length) {
-      el.innerHTML = lunchCache.dishes.slice(0, 4).map((d) => `<div class="dish">• ${esc(d)}</div>`).join("");
-    } else {
-      el.innerHTML = `<span class="empty">Open the Lunch tab to load today's menu.</span>`;
-    }
+    el.innerHTML = `<a href="${esc(buildMenuUrl(lunchUrl()))}" target="_blank" rel="noopener" class="lunch-link">View this week's menu ↗</a>`;
   }
 
   // ============ AI COACH ============
@@ -758,7 +725,6 @@
       minutesThisWeek: weekWorkouts.reduce((s, w) => s + (w.duration || 0), 0),
       workoutStreak: workoutStreak(),
       openTasks: data.tasks.filter((t) => !t.done).map((t) => ({ title: t.title, category: t.category, due: t.due })),
-      lunchToday: lunchCache.date === todayISO() ? lunchCache.dishes : null,
     };
   }
   function insightsPayload() {
@@ -833,6 +799,4 @@
 
   document.body.dataset.view = "dashboard";
   render();
-  // Try to warm the lunch cache in the background so the dashboard can show it.
-  if (data.settings.lunchUrl) fetchLunch().then(() => renderDashLunch());
 })();
