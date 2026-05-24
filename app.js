@@ -8,7 +8,8 @@
   const blank = {
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
-    settings: { lunchUrl: "", name: "", aiBase: "" },
+    courses: [],
+    settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0 },
   };
 
   function load() {
@@ -65,12 +66,16 @@
   });
   document.querySelector(".nav-settings").addEventListener("click", () => showView("settings"));
 
+  document.getElementById("menu-toggle").addEventListener("click", () => document.body.classList.toggle("nav-open"));
+  document.getElementById("nav-backdrop").addEventListener("click", () => document.body.classList.remove("nav-open"));
+
   function showView(view) {
     document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     const el = document.getElementById("view-" + view);
     if (el) el.classList.add("active");
     document.body.dataset.view = view;
+    document.body.classList.remove("nav-open");
     if (view === "lunch") loadLunch();
   }
 
@@ -183,6 +188,18 @@
     save(); gfForm.reset(); document.getElementById("gf-date").value = todayISO(); render();
   });
 
+  // Courses / grades
+  const cForm2 = document.getElementById("course-form");
+  cForm2.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.courses.push({
+      id: uid(), name: val("c-name").trim(),
+      grade: num("c-grade") != null ? num("c-grade") : 0,
+      credits: num("c-credits") || 1,
+    });
+    save(); cForm2.reset(); document.getElementById("c-credits").value = 1; render();
+  });
+
   // Strength / lifts
   const lfForm = document.getElementById("lift-form");
   document.getElementById("lf-date").value = todayISO();
@@ -215,6 +232,12 @@
     data.settings.aiBase = val("ai-base").trim().replace(/\/$/, "");
     save();
     document.getElementById("ai-save-status").textContent = "Saved.";
+  });
+  document.getElementById("elig-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const g = num("elig-gpa");
+    data.settings.eligGpa = g == null ? 2.0 : g;
+    save(); render();
   });
 
   // Export / import
@@ -270,6 +293,7 @@
     renderFootball();
     renderGolf();
     renderLifts();
+    renderGrades();
     renderTasks();
     fillSettings();
   }
@@ -278,6 +302,7 @@
     document.getElementById("lunch-url").value = data.settings.lunchUrl || "";
     document.getElementById("user-name").value = data.settings.name || "";
     document.getElementById("ai-base").value = data.settings.aiBase || "";
+    document.getElementById("elig-gpa").value = data.settings.eligGpa != null ? data.settings.eligGpa : 2.0;
   }
 
   function renderDashboard() {
@@ -320,6 +345,7 @@
       (t) => ({ left: t.title, right: t.due ? relDue(t.due).text : t.category }), "All clear!");
 
     renderDashLunch();
+    renderStreaks();
   }
 
   function fillMini(id, items, map, emptyMsg) {
@@ -337,6 +363,37 @@
     if (!days.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
     while (days.has(d.toISOString().slice(0, 10))) { streak++; d.setDate(d.getDate() - 1); }
     return streak;
+  }
+
+  function streakInfo(dates) {
+    const set = new Set(dates);
+    // current streak (today or yesterday counts as live)
+    let current = 0;
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    if (!set.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
+    while (set.has(d.toISOString().slice(0, 10))) { current++; d.setDate(d.getDate() - 1); }
+    // best streak ever
+    const sorted = [...set].sort();
+    let best = 0, run = 0, prev = null;
+    for (const ds of sorted) {
+      if (prev && Date.parse(ds) - Date.parse(prev) === 86400000) run++;
+      else run = 1;
+      if (run > best) best = run;
+      prev = ds;
+    }
+    return { current, best };
+  }
+
+  function renderStreaks() {
+    const w = streakInfo(data.workouts.map((x) => x.date));
+    const c = streakInfo(data.checkins.map((x) => x.date));
+    const tile = (icon, cur, label, best) =>
+      `<div class="streak-tile"><div class="streak-icon">${icon}</div>
+        <div><div class="streak-num">${cur}<small> day${cur === 1 ? "" : "s"}</small></div>
+        <div class="streak-label">${label}</div><div class="streak-best">best: ${best}</div></div></div>`;
+    document.getElementById("dash-streaks").innerHTML =
+      tile("🔥", w.current, "Workout streak", w.best) +
+      tile("✅", c.current, "Check-in streak", c.best);
   }
 
   function renderSchool() {
@@ -538,6 +595,62 @@
           ${r ? `<span class="badge ${r.overdue && !t.done ? "overdue" : ""}">${fmtDate(t.due)} · ${r.text}</span>` : ""}</div></div>
         <button class="del" data-kind="tasks" data-id="${t.id}">×</button></div>`;
     }).join("") : `<div class="empty-state">No tasks yet. Add something you need to get done.</div>`;
+  }
+
+  // ============ GRADES ============
+  function gradePoint(pct) {
+    if (pct >= 93) return 4.0; if (pct >= 90) return 3.7;
+    if (pct >= 87) return 3.3; if (pct >= 83) return 3.0; if (pct >= 80) return 2.7;
+    if (pct >= 77) return 2.3; if (pct >= 73) return 2.0; if (pct >= 70) return 1.7;
+    if (pct >= 67) return 1.3; if (pct >= 63) return 1.0; if (pct >= 60) return 0.7;
+    return 0.0;
+  }
+  function letterFor(pct) {
+    const map = [[93,"A"],[90,"A-"],[87,"B+"],[83,"B"],[80,"B-"],[77,"C+"],[73,"C"],[70,"C-"],[67,"D+"],[63,"D"],[60,"D-"]];
+    for (const [min, l] of map) if (pct >= min) return l;
+    return "F";
+  }
+
+  function renderGrades() {
+    const courses = data.courses;
+    const totalCredits = courses.reduce((s, c) => s + (c.credits || 1), 0);
+    const gpa = totalCredits ? courses.reduce((s, c) => s + gradePoint(c.grade) * (c.credits || 1), 0) / totalCredits : null;
+    const lowest = courses.length ? Math.min(...courses.map((c) => c.grade)) : null;
+    const failing = courses.filter((c) => c.grade < 60);
+    const threshold = data.settings.eligGpa != null ? data.settings.eligGpa : 2.0;
+
+    document.getElementById("grade-stats").innerHTML =
+      statCard(gpa != null ? gpa.toFixed(2) : "–", "GPA (unweighted)") +
+      statCard(courses.length, "Classes") +
+      statCard(lowest != null ? lowest + "<small>%</small>" : "–", "Lowest class") +
+      statCard(trimNum(totalCredits), "Credits");
+
+    const eligEl = document.getElementById("elig-card");
+    const eligContent = document.getElementById("elig-content");
+    if (!courses.length) {
+      eligEl.className = "card elig";
+      eligContent.innerHTML = `<div class="elig-status">Add your classes to check eligibility.</div>`;
+    } else {
+      const okGpa = gpa >= threshold;
+      const eligible = okGpa && failing.length === 0;
+      eligEl.className = "card elig " + (eligible ? "ok" : "risk");
+      const reasons = [];
+      if (!okGpa) reasons.push(`GPA ${gpa.toFixed(2)} is below the ${threshold} minimum`);
+      if (failing.length) reasons.push(`failing ${failing.length} class${failing.length > 1 ? "es" : ""} (${failing.map((c) => esc(c.name)).join(", ")})`);
+      eligContent.innerHTML = `
+        <div class="elig-status">${eligible ? "✅ Eligible to play" : "⚠️ At risk"}</div>
+        <div class="elig-sub">${eligible ? `GPA ${gpa.toFixed(2)} — above the ${threshold} minimum, no failing classes.` : "You're " + reasons.join(" and ") + "."}</div>`;
+    }
+
+    const el = document.getElementById("course-list");
+    const items = [...courses].sort((a, b) => a.grade - b.grade);
+    el.innerHTML = items.length ? items.map((c) => `
+      <div class="item"><div class="item-body">
+        <div class="item-title">${esc(c.name)}</div>
+        <div class="item-sub"><span class="badge ${c.grade < 60 ? "high" : c.grade < 73 ? "medium" : "low"}">${letterFor(c.grade)}</span>
+        <span>${trimNum(c.grade)}%</span><span>${trimNum(c.credits || 1)} cr</span></div></div>
+        <button class="del" data-kind="courses" data-id="${c.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No classes yet. Add them to track your GPA.</div>`;
   }
 
   // ============ LUNCH ============

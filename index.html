@@ -11,6 +11,8 @@
 </head>
 <body>
   <div class="app">
+    <button class="menu-toggle" id="menu-toggle" aria-label="Open menu">☰</button>
+    <div class="nav-backdrop" id="nav-backdrop"></div>
     <!-- SIDEBAR -->
     <aside class="sidebar">
       <div class="brand">
@@ -20,6 +22,7 @@
       <nav class="nav" id="nav">
         <button class="nav-item active" data-view="dashboard"><span class="ic">◆</span> Dashboard</button>
         <button class="nav-item" data-view="school"><span class="ic">✎</span> School</button>
+        <button class="nav-item" data-view="grades"><span class="ic">🎓</span> Grades</button>
         <button class="nav-item" data-view="sports"><span class="ic">⛰</span> Sports</button>
         <button class="nav-item" data-view="health"><span class="ic">❤</span> Health &amp; Workout</button>
         <button class="nav-item" data-view="swing"><span class="ic">⚾</span> Swing Lab</button>
@@ -75,6 +78,10 @@
             <h3>Today's lunch</h3>
             <div id="dash-lunch" class="lunch-mini"></div>
           </div>
+          <div class="card">
+            <h3>Streaks</h3>
+            <div id="dash-streaks" class="streaks"></div>
+          </div>
         </div>
       </section>
 
@@ -100,6 +107,21 @@
         </form>
         <p class="hint">Tip: break a big project into smaller assignments to track real progress.</p>
         <div class="list" id="school-list"></div>
+      </section>
+
+      <!-- GRADES -->
+      <section class="view" id="view-grades">
+        <div class="page-head"><h1>Grades</h1></div>
+        <div class="stats" id="grade-stats"></div>
+        <div class="card elig" id="elig-card"><div id="elig-content"></div></div>
+        <form class="entry-form" id="course-form">
+          <input type="text" id="c-name" placeholder="Class (e.g. Algebra II)" required>
+          <input type="number" id="c-grade" placeholder="Grade %" min="0" max="100" step="0.1" required>
+          <input type="number" id="c-credits" placeholder="Credits" min="0.5" step="0.5" value="1">
+          <button type="submit">Add class</button>
+        </form>
+        <p class="hint">GPA is on the standard unweighted 4.0 scale. Eligibility is a general guide — always check your school's exact rule.</p>
+        <div class="list" id="course-list"></div>
       </section>
 
       <!-- SPORTS -->
@@ -343,6 +365,14 @@
             <button type="submit">Save</button>
           </form>
           <p id="ai-save-status" class="hint"></p>
+        </div>
+        <div class="card">
+          <h3>Sports eligibility rule</h3>
+          <p class="hint">Minimum GPA your school requires to stay eligible to play. Used on the Grades tab.</p>
+          <form class="entry-form stacked" id="elig-form">
+            <input type="number" id="elig-gpa" placeholder="2.0" min="0" max="4" step="0.1">
+            <button type="submit">Save</button>
+          </form>
         </div>
         <div class="card">
           <h3>Your name</h3>
