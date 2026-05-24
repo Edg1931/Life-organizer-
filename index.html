@@ -21,6 +21,7 @@
       </div>
       <nav class="nav" id="nav">
         <button class="nav-item active" data-view="dashboard"><span class="ic">◆</span> Dashboard</button>
+        <button class="nav-item" data-view="calendar"><span class="ic">📅</span> Calendar</button>
         <button class="nav-item" data-view="school"><span class="ic">✎</span> School</button>
         <button class="nav-item" data-view="grades"><span class="ic">🎓</span> Grades</button>
         <button class="nav-item" data-view="sports"><span class="ic">⛰</span> Sports</button>
@@ -94,6 +95,42 @@
           <div class="card">
             <h3>Streaks</h3>
             <div id="dash-streaks" class="streaks"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CALENDAR -->
+      <section class="view" id="view-calendar">
+        <div class="page-head"><h1>Calendar</h1></div>
+        <div class="cal-layout">
+          <div class="card cal-main">
+            <div class="cal-nav">
+              <button id="cal-prev" type="button" aria-label="Previous month">‹</button>
+              <h3 id="cal-title"></h3>
+              <button id="cal-next" type="button" aria-label="Next month">›</button>
+              <button id="cal-today" type="button" class="btn-ghost">Today</button>
+            </div>
+            <div class="cal-dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+            <div class="cal-grid" id="cal-grid"></div>
+          </div>
+          <div class="card cal-side">
+            <h3 id="cal-day-title">Today</h3>
+            <form class="entry-form stacked" id="event-form">
+              <input type="text" id="e-title" placeholder="Event (e.g. vs Lakewood)" required>
+              <div class="row">
+                <input type="date" id="e-date" required>
+                <input type="time" id="e-time">
+              </div>
+              <select id="e-type">
+                <option value="Game">Game / Match</option>
+                <option value="Practice">Practice</option>
+                <option value="Exam">Exam</option>
+                <option value="Work">Work</option>
+                <option value="Personal">Personal</option>
+              </select>
+              <button type="submit">Add to calendar</button>
+            </form>
+            <div id="cal-day-events" class="list"></div>
           </div>
         </div>
       </section>

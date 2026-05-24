@@ -8,7 +8,7 @@
   const blank = {
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
-    courses: [], finances: [], goals: [], templates: [], foods: [],
+    courses: [], finances: [], goals: [], templates: [], foods: [], events: [],
     settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0, calorieGoal: 2400, matchWeight: null, nextEvent: { name: "", date: "" } },
   };
 
@@ -36,6 +36,13 @@
 
   // --- date helpers ---
   const todayISO = () => new Date().toISOString().slice(0, 10);
+  const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  function fmtTime(t) {
+    if (!t) return "";
+    const [h, m] = t.split(":").map(Number);
+    const ap = h >= 12 ? "PM" : "AM";
+    return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${ap}`;
+  }
   function fmtDate(iso) {
     if (!iso) return "";
     return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -262,6 +269,25 @@
   }
   renderQuickAdd();
 
+  // Calendar
+  let calMonth = new Date(); calMonth.setDate(1); calMonth.setHours(0, 0, 0, 0);
+  let calSelected = isoLocal(new Date());
+
+  document.getElementById("event-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.events.push({ id: uid(), title: val("e-title").trim(), date: val("e-date"), time: val("e-time"), type: val("e-type") });
+    save(); e.target.reset(); document.getElementById("e-date").value = calSelected; render();
+  });
+  document.getElementById("cal-prev").addEventListener("click", () => { calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
+  document.getElementById("cal-next").addEventListener("click", () => { calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); });
+  document.getElementById("cal-today").addEventListener("click", () => { calMonth = new Date(); calMonth.setDate(1); calMonth.setHours(0, 0, 0, 0); calSelected = isoLocal(new Date()); renderCalendar(); });
+  document.getElementById("cal-grid").addEventListener("click", (e) => {
+    const cell = e.target.closest(".cal-cell[data-date]");
+    if (!cell) return;
+    calSelected = cell.dataset.date;
+    renderCalendar();
+  });
+
   // Game week
   document.getElementById("gw-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -440,6 +466,7 @@
   function statCard(num, label) { return `<div class="stat-card"><div class="stat-num">${num}</div><div class="stat-label">${label}</div></div>`; }
 
   function render() {
+    renderCalendar();
     renderDashboard();
     renderSchool();
     renderWorkouts();
@@ -538,6 +565,77 @@
       </div>
       ${dueBefore ? `<div class="sug"><span class="sug-i">📚</span><span>${dueBefore} school item${dueBefore > 1 ? "s" : ""} due before ${name} — knock ${dueBefore > 1 ? "them" : "it"} out early so game week stays calm.</span></div>` : ""}
       <ul class="gw-plan">${plan.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>`;
+  }
+
+  // ============ CALENDAR ============
+  function typeCls(type) {
+    return { Game: "c-game", Practice: "c-practice", Exam: "c-exam", Work: "c-work", Personal: "c-personal" }[type] || "c-personal";
+  }
+  function calItems() {
+    const items = [];
+    data.events.forEach((e) => items.push({ date: e.date, label: e.title, cls: typeCls(e.type), kind: "event", ref: e }));
+    data.school.filter((s) => !s.done && s.due).forEach((s) => items.push({ date: s.due, label: s.title, cls: "c-exam", kind: "school", ref: s }));
+    const ne = data.settings.nextEvent;
+    if (ne && ne.date) items.push({ date: ne.date, label: ne.name || "Game", cls: "c-game", kind: "game", ref: ne });
+    return items;
+  }
+  function eventsByDate() {
+    const m = {};
+    calItems().forEach((it) => { (m[it.date] = m[it.date] || []).push(it); });
+    return m;
+  }
+  function upcomingEvents(days) {
+    const today = isoLocal(new Date());
+    const max = new Date(); max.setDate(max.getDate() + days);
+    const maxStr = isoLocal(max);
+    return calItems().filter((it) => it.date >= today && it.date <= maxStr)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((it) => ({ date: it.date, title: it.label, type: it.kind === "event" ? it.ref.type : it.kind }));
+  }
+
+  function renderCalendar() {
+    const grid = document.getElementById("cal-grid");
+    if (!grid) return;
+    const y = calMonth.getFullYear(), mo = calMonth.getMonth();
+    document.getElementById("cal-title").textContent = calMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const startDow = new Date(y, mo, 1).getDay();
+    const daysInMonth = new Date(y, mo + 1, 0).getDate();
+    const byDate = eventsByDate();
+    const todayStr = isoLocal(new Date());
+    const cells = [];
+    for (let i = 0; i < startDow; i++) cells.push(null);
+    for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(y, mo, day));
+    while (cells.length % 7) cells.push(null);
+    grid.innerHTML = cells.map((c) => {
+      if (!c) return `<div class="cal-cell empty"></div>`;
+      const ds = isoLocal(c);
+      const evs = byDate[ds] || [];
+      const cls = ["cal-cell"];
+      if (evs.length) cls.push("has-ev");
+      if (ds === todayStr) cls.push("today");
+      if (ds === calSelected) cls.push("sel");
+      const chips = evs.slice(0, 3).map((e) => `<span class="cal-chip ${e.cls}">${esc(e.label)}</span>`).join("");
+      const more = evs.length > 3 ? `<span class="cal-more">+${evs.length - 3} more</span>` : "";
+      return `<button class="${cls.join(" ")}" data-date="${ds}"><span class="cal-num">${c.getDate()}</span>${chips}${more}</button>`;
+    }).join("");
+    renderDayPanel();
+  }
+
+  function renderDayPanel() {
+    const dateEl = document.getElementById("e-date");
+    if (dateEl) dateEl.value = calSelected;
+    const d = new Date(calSelected + "T00:00:00");
+    document.getElementById("cal-day-title").textContent = d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    const items = calItems().filter((it) => it.date === calSelected)
+      .sort((a, b) => ((a.ref.time || "99") > (b.ref.time || "99") ? 1 : -1));
+    const el = document.getElementById("cal-day-events");
+    el.innerHTML = items.length ? items.map((it) => {
+      const meta = it.kind === "school" ? "School due" : it.kind === "game" ? "Game week" : esc(it.ref.type || "Event");
+      const timeStr = it.kind === "event" && it.ref.time ? fmtTime(it.ref.time) : "";
+      return `<div class="item"><div class="item-body"><div class="item-title">${esc(it.label)}</div>
+        <div class="item-sub"><span class="badge ${it.cls}">${meta}</span>${timeStr ? `<span>${timeStr}</span>` : ""}</div></div>
+        ${it.kind === "event" ? `<button class="del" data-kind="events" data-id="${it.ref.id}">×</button>` : ""}</div>`;
+    }).join("") : `<div class="empty-state">Nothing scheduled. Add an event below.</div>`;
   }
 
   function fillMini(id, items, map, emptyMsg) {
@@ -1152,6 +1250,7 @@
       minutesThisWeek: weekWorkouts.reduce((s, w) => s + (w.duration || 0), 0),
       workoutStreak: workoutStreak(),
       openTasks: data.tasks.filter((t) => !t.done).map((t) => ({ title: t.title, category: t.category, due: t.due })),
+      upcomingSchedule: upcomingEvents(14),
     };
   }
   function insightsPayload() {
@@ -1163,6 +1262,7 @@
       football: data.football.slice(-10),
       golf: data.golf.slice(-10),
       lifts: data.lifts.slice(-20),
+      upcomingSchedule: upcomingEvents(21),
       openSchool: data.school.filter((s) => !s.done),
     };
   }
