@@ -169,7 +169,11 @@
                   <option value="weekly">Repeats weekly</option>
                 </select>
               </div>
-              <button type="submit">Add to calendar</button>
+              <div class="event-actions">
+                <button type="submit" id="event-submit">Add to calendar</button>
+                <button type="button" id="event-cancel-edit" class="btn-ghost" hidden>Cancel edit</button>
+                <button type="button" id="event-delete" class="btn-danger" hidden>Delete event</button>
+              </div>
             </form>
             <div id="cal-day-events" class="list"></div>
           </div>

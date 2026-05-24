@@ -264,6 +264,17 @@ body[data-view="calendar"] { --section: #38bdf8; }
 
 .del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 20px; padding: 3px 9px; border-radius: 8px; flex: 0 0 auto; line-height: 1; transition: color .15s, background .15s; }
 .del:hover { color: var(--red); background: rgba(251,113,133,.12); }
+.edit-event { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 3px 9px; border-radius: 8px; flex: 0 0 auto; line-height: 1; transition: color .15s, background .15s; }
+.edit-event:hover { color: var(--accent); background: var(--accent-soft); }
+
+.event-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.event-actions #event-submit { flex: 1 1 auto; }
+.btn-danger { background: rgba(251,113,133,.14) !important; color: var(--red) !important; box-shadow: none !important; border: 1px solid rgba(251,113,133,.3) !important; }
+.btn-danger:hover { background: rgba(251,113,133,.22) !important; }
+
+.gw-clickable { cursor: pointer; border-radius: 14px; padding: 8px; margin: -8px -8px 4px; transition: background .15s; }
+.gw-clickable:hover { background: var(--accent-soft); }
+.gw-edit-hint { color: var(--accent); font-weight: 600; }
 
 .empty-state { text-align: center; color: var(--muted); padding: 44px 20px; font-style: italic; border: 1px dashed var(--border); border-radius: var(--radius-sm); }
 

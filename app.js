@@ -274,10 +274,63 @@
   let calMonth = new Date(); calMonth.setDate(1); calMonth.setHours(0, 0, 0, 0);
   let calSelected = isoLocal(new Date());
 
+  let editingEventId = null;
+
+  function resetEventForm() {
+    const f = document.getElementById("event-form");
+    f.reset();
+    document.getElementById("e-date").value = calSelected;
+  }
+  function endEventEdit() {
+    editingEventId = null;
+    document.getElementById("event-submit").textContent = "Add to calendar";
+    document.getElementById("event-cancel-edit").hidden = true;
+    document.getElementById("event-delete").hidden = true;
+  }
+  function startEventEdit(id) {
+    const ev = data.events.find((x) => x.id === id);
+    if (!ev) return;
+    editingEventId = id;
+    showView("calendar");
+    calSelected = ev.date;
+    calMonth = new Date(ev.date + "T00:00:00"); calMonth.setDate(1); calMonth.setHours(0, 0, 0, 0);
+    renderCalendar();
+    document.getElementById("e-title").value = ev.title || "";
+    document.getElementById("e-date").value = ev.date || "";
+    document.getElementById("e-time").value = ev.time || "";
+    document.getElementById("e-loc").value = ev.location || "";
+    document.getElementById("e-type").value = ev.type || "Personal";
+    document.getElementById("e-repeat").value = ev.repeat || "none";
+    document.getElementById("event-submit").textContent = "Save changes";
+    document.getElementById("event-cancel-edit").hidden = false;
+    document.getElementById("event-delete").hidden = false;
+    const card = document.querySelector("#view-calendar .cal-side");
+    if (card && card.scrollIntoView) card.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   document.getElementById("event-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    data.events.push({ id: uid(), title: val("e-title").trim(), date: val("e-date"), time: val("e-time"), location: val("e-loc").trim(), type: val("e-type"), repeat: val("e-repeat") });
-    save(); e.target.reset(); document.getElementById("e-date").value = calSelected; render();
+    const fields = { title: val("e-title").trim(), date: val("e-date"), time: val("e-time"), location: val("e-loc").trim(), type: val("e-type"), repeat: val("e-repeat") };
+    if (editingEventId) {
+      const ev = data.events.find((x) => x.id === editingEventId);
+      if (ev) Object.assign(ev, fields);
+      endEventEdit();
+    } else {
+      data.events.push({ id: uid(), ...fields });
+    }
+    save(); resetEventForm(); render();
+  });
+  document.getElementById("event-cancel-edit").addEventListener("click", () => { endEventEdit(); resetEventForm(); });
+  document.getElementById("event-delete").addEventListener("click", () => {
+    if (!editingEventId) return;
+    if (!confirm("Delete this event? This can't be undone.")) return;
+    data.events = data.events.filter((x) => x.id !== editingEventId);
+    endEventEdit(); resetEventForm(); save(); render();
+  });
+  // Edit an event from the calendar day panel or the dashboard's Game week card
+  document.querySelector(".content").addEventListener("click", (e) => {
+    const ed = e.target.closest(".edit-event[data-id]") || e.target.closest("[data-edit-game]");
+    if (ed) startEventEdit(ed.dataset.id || ed.dataset.editGame);
   });
   document.getElementById("cal-prev").addEventListener("click", () => { calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
   document.getElementById("cal-next").addEventListener("click", () => { calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); });
@@ -783,10 +836,11 @@
     const cd = d === 0 ? "Today" : d === 1 ? "Tomorrow" : `in ${d} days`;
     const time = g.ref && g.ref.time ? fmtTime(g.ref.time) : "";
     const where = g.ref && g.ref.location ? String(g.ref.location).trim() : "";
+    const editId = g.kind === "event" && g.ref && g.ref.id ? g.ref.id : null;
     body.innerHTML = `
-      <div class="gw-count">
+      <div class="gw-count${editId ? " gw-clickable" : ""}"${editId ? ` data-edit-game="${editId}" title="Edit or cancel this game"` : ""}>
         <span class="gw-d">${d === 0 ? "🏆" : d}</span>
-        <div><div class="gw-name">${name}</div><div class="gw-when">${cd}</div></div>
+        <div><div class="gw-name">${name}</div><div class="gw-when">${cd}${editId ? ` · <span class="gw-edit-hint">tap to edit ✎</span>` : ""}</div></div>
         <span class="badge gw-phase">${phase}</span>
       </div>
       <div class="gw-details">
@@ -870,7 +924,7 @@
 
   function renderDayPanel() {
     const dateEl = document.getElementById("e-date");
-    if (dateEl) dateEl.value = calSelected;
+    if (dateEl && !editingEventId) dateEl.value = calSelected;
     const d = new Date(calSelected + "T00:00:00");
     document.getElementById("cal-day-title").textContent = d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
     const items = calItems().filter((it) => it.date === calSelected)
@@ -884,7 +938,7 @@
       const sportLink = sport ? `<button class="sport-link" data-sport="${esc(sport)}">${sport === "track" ? "Track & PV" : "Log stats"} ›</button>` : "";
       return `<div class="item"><div class="item-body"><div class="item-title">${esc(it.label)}</div>
         <div class="item-sub"><span class="badge ${it.cls}">${meta}</span>${timeStr ? `<span>${timeStr}</span>` : ""}${loc ? `<span>📍 ${esc(loc)}</span>` : ""}${sportLink}</div></div>
-        ${it.kind === "event" ? `<button class="del" data-kind="events" data-id="${it.ref.id}">×</button>` : ""}</div>`;
+        ${it.kind === "event" ? `<button class="edit-event" data-id="${it.ref.id}" title="Edit event">✎</button><button class="del" data-kind="events" data-id="${it.ref.id}">×</button>` : ""}</div>`;
     }).join("") : `<div class="empty-state">Nothing scheduled. Add an event below.</div>`;
   }
 
