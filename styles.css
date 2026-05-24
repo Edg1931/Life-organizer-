@@ -329,6 +329,16 @@ body[data-view="money"]   { --section: #2dd4bf; }
 .vid-link { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--accent); text-decoration: none; }
 .vid-link:hover { text-decoration: underline; }
 
+/* REST TIMER */
+.rest-timer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.rest-display { font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 18px; min-width: 88px; color: var(--muted); }
+.rest-display.live { color: var(--accent); }
+.rest-display.done { color: var(--green); animation: pulse .6s ease 2; }
+@keyframes pulse { 50% { opacity: .4; } }
+.rest-btn { background: rgba(255,255,255,.06); color: var(--text); border: 1px solid var(--border); cursor: pointer; font: inherit; font-weight: 700; font-size: 13px; padding: 7px 13px; border-radius: 999px; transition: background .15s; }
+.rest-btn:hover { background: rgba(255,255,255,.12); }
+.rest-btn.stop { color: var(--red); }
+
 /* STRENGTH / PRs */
 .sub-h { font-size: 12.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 12px; font-weight: 700; }
 .pr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 6px; }

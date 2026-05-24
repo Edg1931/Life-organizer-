@@ -29,6 +29,8 @@ function buildPrompt(kind, payload) {
       return `Here is a snapshot of the student's recent school, sports, health, and workout data:\n${json}\n\nGive a brief "weekly insights" read: 2-4 patterns or trends you notice across school + sports + health, then 2-3 specific suggestions. Be encouraging and specific.`;
     case "coach":
       return `The student asked their coach:\n"${(p.question || "").slice(0, 800)}"\n\nHere is relevant context from their hub:\n${JSON.stringify(p.context || {}, null, 2)}\n\nAnswer helpfully and specifically, using the context where relevant.`;
+    case "workout":
+      return `The student wants a workout. Their request: "${(p.request || "a balanced 45-minute session").slice(0, 300)}".\n\nRecent training context:\n${JSON.stringify(p.context || {}, null, 2)}\n\nDesign one specific session: a short warm-up, the main work as exercises with sets × reps and rough intensity, and a quick cooldown. Keep it realistic for a high-school athlete with normal gym access. Plain text, simple "- " bullets, no markdown headers.`;
     default:
       return null;
   }

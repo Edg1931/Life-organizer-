@@ -8,7 +8,7 @@
   const blank = {
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
-    courses: [], finances: [], goals: [],
+    courses: [], finances: [], goals: [], templates: [],
     settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0 },
   };
 
@@ -252,6 +252,64 @@
     finally { btn.disabled = false; }
   });
 
+  // AI workout generator
+  document.getElementById("gen-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const req = val("gen-req").trim();
+    const out = document.getElementById("gen-out");
+    out.textContent = "Building your workout…";
+    try {
+      out.textContent = await aiCall("workout", { request: req, context: { recentWorkouts: data.workouts.slice(-8), recentLifts: data.lifts.slice(-15) } });
+    } catch (err) { out.textContent = aiErrorText(err); }
+  });
+
+  // Rest timer
+  let restInterval = null;
+  const restDisplay = document.getElementById("rest-display");
+  function stopRest() { clearInterval(restInterval); restInterval = null; restDisplay.textContent = "Rest timer"; restDisplay.classList.remove("live", "done"); }
+  function startRest(sec) {
+    clearInterval(restInterval);
+    let remaining = sec;
+    restDisplay.classList.add("live"); restDisplay.classList.remove("done");
+    const tick = () => {
+      const m = Math.floor(remaining / 60), s = remaining % 60;
+      restDisplay.textContent = `${m}:${String(s).padStart(2, "0")}`;
+      if (remaining <= 0) {
+        clearInterval(restInterval); restInterval = null;
+        restDisplay.textContent = "Done! 💪"; restDisplay.classList.remove("live"); restDisplay.classList.add("done");
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        return;
+      }
+      remaining--;
+    };
+    tick();
+    restInterval = setInterval(tick, 1000);
+  }
+  document.querySelectorAll(".rest-btn[data-sec]").forEach((b) => b.addEventListener("click", () => startRest(parseInt(b.dataset.sec, 10))));
+  document.getElementById("rest-stop").addEventListener("click", stopRest);
+
+  // Workout templates
+  document.getElementById("tmpl-save").addEventListener("click", () => {
+    const today = data.lifts.filter((l) => l.date === todayISO());
+    if (!today.length) { alert("Log some lifts today first, then save them as a template."); return; }
+    const name = prompt("Name this template (e.g. Leg Day):", "");
+    if (!name || !name.trim()) return;
+    data.templates.push({
+      id: uid(), name: name.trim(),
+      items: today.map((l) => ({ exercise: l.exercise, weight: l.weight, reps: l.reps, sets: l.sets })),
+    });
+    save(); render();
+  });
+  document.querySelector(".content").addEventListener("click", (e) => {
+    const btn = e.target.closest(".tmpl-log");
+    if (!btn) return;
+    const t = data.templates.find((x) => x.id === btn.dataset.id);
+    if (!t) return;
+    t.items.forEach((it) => data.lifts.push({ id: uid(), date: todayISO(), exercise: it.exercise, weight: it.weight, reps: it.reps, sets: it.sets }));
+    save(); render();
+    openModal("Logged ✅", esc(`"${t.name}" added to today's strength log (${t.items.length} exercise${t.items.length === 1 ? "" : "s"}). Adjust the weights if today was heavier or lighter.`));
+  });
+
   // Settings forms
   document.getElementById("lunch-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -476,6 +534,19 @@
     renderVolumeChart();
     renderSuggestions();
     renderLiftChart();
+    renderTemplates();
+  }
+
+  function renderTemplates() {
+    const el = document.getElementById("tmpl-list");
+    el.innerHTML = data.templates.length ? data.templates.map((t) => `
+      <div class="item"><div class="item-body">
+        <div class="item-title">${esc(t.name)}</div>
+        <div class="item-sub"><span class="badge">${t.items.length} exercise${t.items.length === 1 ? "" : "s"}</span>
+        <span>${esc(t.items.map((i) => i.exercise).slice(0, 4).join(", "))}</span></div></div>
+        <button class="tmpl-log ai-chip" data-id="${t.id}" title="Log this workout today">＋ Log</button>
+        <button class="del" data-kind="templates" data-id="${t.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No templates yet. Log some lifts today, then tap "Save today's lifts".</div>`;
   }
 
   const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
