@@ -125,6 +125,7 @@ body[data-view="swing"]   { --section: #fbbf24; }
 body[data-view="lunch"]   { --section: #22d3ee; }
 body[data-view="tasks"]   { --section: #a855f7; }
 body[data-view="grades"]  { --section: #818cf8; }
+body[data-view="money"]   { --section: #2dd4bf; }
 
 /* CARDS */
 .card {
@@ -301,6 +302,23 @@ body[data-view="grades"]  { --section: #818cf8; }
 .elig.risk { border-color: rgba(251,113,133,.4); background: linear-gradient(135deg, rgba(251,113,133,.12), transparent), var(--surface); }
 .elig-status { font-family: "Space Grotesk", sans-serif; font-size: 21px; font-weight: 700; }
 .elig-sub { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+/* MONEY */
+.goal-list { display: flex; flex-direction: column; gap: 14px; }
+.goal { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; }
+.goal-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.goal-name { font-weight: 700; font-size: 15px; }
+.goal-amt { font-family: "Space Grotesk", sans-serif; font-weight: 700; }
+.goal-amt small { color: var(--muted); font-weight: 600; font-size: 13px; }
+.goal-bar { height: 10px; background: rgba(255,255,255,.07); border-radius: 999px; overflow: hidden; }
+.goal-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #2dd4bf, #34d399); transition: width .5s cubic-bezier(.2,.7,.2,1); }
+.goal-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.goal-pct { font-size: 13px; color: var(--muted); font-weight: 700; flex: 1; }
+.goal-add { background: rgba(45,212,191,.16); color: #5eead4; border: none; cursor: pointer; font: inherit; font-weight: 700; font-size: 13px; padding: 7px 13px; border-radius: 999px; transition: filter .15s; }
+.goal-add:hover { filter: brightness(1.15); }
+.txn-amt { font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 15px; flex: 0 0 auto; }
+.txn-amt.income { color: var(--green); }
+.txn-amt.expense { color: var(--red); }
 
 /* STRENGTH / PRs */
 .sub-h { font-size: 12.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 18px 0 12px; font-weight: 700; }

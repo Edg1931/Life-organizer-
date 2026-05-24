@@ -8,7 +8,7 @@
   const blank = {
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
-    courses: [],
+    courses: [], finances: [], goals: [],
     settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0 },
   };
 
@@ -200,6 +200,26 @@
     save(); cForm2.reset(); document.getElementById("c-credits").value = 1; render();
   });
 
+  // Money — transactions
+  const txnForm = document.getElementById("txn-form");
+  document.getElementById("x-date").value = todayISO();
+  txnForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.finances.push({
+      id: uid(), date: val("x-date"), desc: val("x-desc").trim(),
+      type: val("x-type"), category: val("x-cat"), amount: num("x-amount") || 0,
+    });
+    save(); txnForm.reset(); document.getElementById("x-date").value = todayISO(); render();
+  });
+
+  // Money — savings goals
+  const goalForm = document.getElementById("goal-form");
+  goalForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    data.goals.push({ id: uid(), name: val("g-name").trim(), target: num("g-target") || 0, saved: 0 });
+    save(); goalForm.reset(); render();
+  });
+
   // Strength / lifts
   const lfForm = document.getElementById("lift-form");
   document.getElementById("lf-date").value = todayISO();
@@ -295,6 +315,7 @@
     renderGolf();
     renderLifts();
     renderGrades();
+    renderMoney();
     renderTasks();
     fillSettings();
   }
@@ -597,6 +618,67 @@
         <button class="del" data-kind="tasks" data-id="${t.id}">×</button></div>`;
     }).join("") : `<div class="empty-state">No tasks yet. Add something you need to get done.</div>`;
   }
+
+  // ============ MONEY ============
+  const money = (n) => "$" + (Math.round(n * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+  function renderMoney() {
+    const txns = data.finances;
+    const income = txns.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+    const expense = txns.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+    const balance = income - expense;
+    const ym = todayISO().slice(0, 7);
+    const monthIn = txns.filter((t) => t.type === "income" && t.date.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
+    const monthOut = txns.filter((t) => t.type === "expense" && t.date.startsWith(ym)).reduce((s, t) => s + t.amount, 0);
+    const saved = data.goals.reduce((s, g) => s + (g.saved || 0), 0);
+
+    document.getElementById("money-stats").innerHTML =
+      statCard(money(balance), "Balance") +
+      statCard(money(monthIn), "In this month") +
+      statCard(money(monthOut), "Out this month") +
+      statCard(money(saved), "Saved in goals");
+
+    const gEl = document.getElementById("goal-list");
+    gEl.innerHTML = data.goals.length ? data.goals.map((g) => {
+      const pct = g.target ? Math.min(100, Math.round((g.saved / g.target) * 100)) : 0;
+      return `<div class="goal">
+        <div class="goal-top">
+          <span class="goal-name">${esc(g.name)}</span>
+          <span class="goal-amt">${money(g.saved)} <small>/ ${money(g.target)}</small></span>
+        </div>
+        <div class="goal-bar"><div class="goal-fill" style="width:${pct}%"></div></div>
+        <div class="goal-actions">
+          <span class="goal-pct">${pct}%</span>
+          <button class="goal-add" data-id="${g.id}">+ Add money</button>
+          <button class="del" data-kind="goals" data-id="${g.id}">×</button>
+        </div>
+      </div>`;
+    }).join("") : `<div class="empty-state">No goals yet. Add one to start saving toward something.</div>`;
+
+    const tEl = document.getElementById("txn-list");
+    const items = [...txns].sort((a, b) => b.date.localeCompare(a.date));
+    tEl.innerHTML = items.length ? items.map((t) => `
+      <div class="item"><div class="item-body">
+        <div class="item-title">${esc(t.desc)}</div>
+        <div class="item-sub"><span class="badge">${esc(t.category)}</span><span>${fmtDate(t.date)}</span></div></div>
+        <span class="txn-amt ${t.type}">${t.type === "income" ? "+" : "−"}${money(t.amount)}</span>
+        <button class="del" data-kind="finances" data-id="${t.id}">×</button></div>`).join("")
+      : `<div class="empty-state">No transactions yet. Log your job, allowance, or spending.</div>`;
+  }
+
+  // contribute to a savings goal
+  document.querySelector(".content").addEventListener("click", (e) => {
+    const btn = e.target.closest(".goal-add");
+    if (!btn) return;
+    const g = data.goals.find((x) => x.id === btn.dataset.id);
+    if (!g) return;
+    const input = prompt(`Add to "${g.name}" (use a negative number to remove):`, "");
+    if (input == null) return;
+    const amt = parseFloat(input);
+    if (isNaN(amt)) return;
+    g.saved = Math.max(0, (g.saved || 0) + amt);
+    save(); render();
+  });
 
   // ============ GRADES ============
   function gradePoint(pct) {

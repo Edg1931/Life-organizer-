@@ -27,6 +27,7 @@
         <button class="nav-item" data-view="health"><span class="ic">❤</span> Health &amp; Workout</button>
         <button class="nav-item" data-view="swing"><span class="ic">⚾</span> Swing Lab</button>
         <button class="nav-item" data-view="lunch"><span class="ic">🍽</span> Lunch</button>
+        <button class="nav-item" data-view="money"><span class="ic">💰</span> Money</button>
         <button class="nav-item" data-view="tasks"><span class="ic">✓</span> Tasks</button>
       </nav>
       <button class="nav-item nav-settings" data-view="settings"><span class="ic">⚙</span> Settings</button>
@@ -324,6 +325,48 @@
         <div class="page-head"><h1>Lunch</h1></div>
         <div class="card" id="lunch-card">
           <div id="lunch-content"></div>
+        </div>
+      </section>
+
+      <!-- MONEY -->
+      <section class="view" id="view-money">
+        <div class="page-head"><h1>Money</h1></div>
+        <div class="stats" id="money-stats"></div>
+
+        <div class="card">
+          <h3>Savings goals</h3>
+          <form class="entry-form" id="goal-form">
+            <input type="text" id="g-name" placeholder="Goal (e.g. Car fund)" required>
+            <input type="number" id="g-target" placeholder="Target $" min="1" step="1" required>
+            <button type="submit">Add goal</button>
+          </form>
+          <div id="goal-list" class="goal-list"></div>
+        </div>
+
+        <div class="card">
+          <h3>Transactions</h3>
+          <form class="entry-form" id="txn-form">
+            <input type="date" id="x-date" required>
+            <input type="text" id="x-desc" placeholder="Description" required>
+            <select id="x-type">
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+            <select id="x-cat">
+              <option value="Job">Job</option>
+              <option value="Allowance">Allowance</option>
+              <option value="Gift">Gift</option>
+              <option value="Food">Food</option>
+              <option value="Gear">Gear</option>
+              <option value="Gas">Gas</option>
+              <option value="Fun">Fun</option>
+              <option value="Savings">Savings</option>
+              <option value="Other">Other</option>
+            </select>
+            <input type="number" id="x-amount" placeholder="Amount $" min="0" step="0.01" required>
+            <button type="submit">Add</button>
+          </form>
+          <div class="list" id="txn-list"></div>
         </div>
       </section>
 
