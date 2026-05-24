@@ -23,6 +23,7 @@
         <button class="nav-item active" data-view="dashboard"><span class="ic">◆</span> Dashboard</button>
         <button class="nav-item" data-view="calendar"><span class="ic">📅</span> Calendar</button>
         <button class="nav-item" data-view="school"><span class="ic">✎</span> School</button>
+        <button class="nav-item" data-view="tutor"><span class="ic">📸</span> Homework Helper</button>
         <button class="nav-item" data-view="grades"><span class="ic">🎓</span> Grades</button>
         <button class="nav-item" data-view="sports"><span class="ic">⛰</span> Sports</button>
         <button class="nav-item" data-view="health"><span class="ic">❤</span> Health &amp; Workout</button>
@@ -164,8 +165,56 @@
           <input type="date" id="s-due" required>
           <button type="submit">Add</button>
         </form>
-        <p class="hint">Tip: break a big project into smaller assignments to track real progress.</p>
+        <p class="hint">Tip: break a big project into smaller assignments to track real progress. Stuck on one? Open the <button type="button" class="link-btn" data-view="tutor">Homework Helper</button>.</p>
         <div class="list" id="school-list"></div>
+      </section>
+
+      <!-- HOMEWORK HELPER -->
+      <section class="view" id="view-tutor">
+        <div class="page-head">
+          <h1>Homework Helper</h1>
+          <p class="page-sub">Snap a photo of a tricky problem and a subject-expert tutor will explain it step by step, quiz you, or build flashcards — so you actually get it.</p>
+        </div>
+
+        <div class="card tutor-card">
+          <div class="tutor-step"><span class="step-num">1</span><h3>Pick the subject</h3></div>
+          <div class="subject-grid" id="subject-grid">
+            <button type="button" class="subject-chip active" data-subject="math"><span class="subj-ic">➗</span>Math</button>
+            <button type="button" class="subject-chip" data-subject="science"><span class="subj-ic">🔬</span>Science</button>
+            <button type="button" class="subject-chip" data-subject="english"><span class="subj-ic">📖</span>English</button>
+            <button type="button" class="subject-chip" data-subject="history"><span class="subj-ic">🏛</span>History</button>
+            <button type="button" class="subject-chip" data-subject="language"><span class="subj-ic">🗣</span>Language</button>
+            <button type="button" class="subject-chip" data-subject="cs"><span class="subj-ic">💻</span>Comp Sci</button>
+            <button type="button" class="subject-chip" data-subject="other"><span class="subj-ic">✦</span>Other</button>
+          </div>
+
+          <div class="tutor-step"><span class="step-num">2</span><h3>Add the problem</h3></div>
+          <label class="photo-drop" id="photo-drop">
+            <input type="file" id="hw-photo" accept="image/*" capture="environment">
+            <div class="photo-drop-empty" id="photo-drop-empty">
+              <span class="photo-ic">📷</span>
+              <span class="photo-label">Take or upload a photo</span>
+              <span class="photo-hint">Tap to use your camera, or pick an image of the problem</span>
+            </div>
+            <img id="hw-preview" class="photo-preview" alt="Homework preview" hidden>
+          </label>
+          <button type="button" class="btn-ghost photo-clear" id="photo-clear" hidden>Remove photo</button>
+          <textarea id="hw-question" class="hw-question" rows="2" placeholder="Optional: type the problem instead, or tell the tutor exactly what's confusing you…"></textarea>
+
+          <div class="tutor-step"><span class="step-num">3</span><h3>How can I help?</h3></div>
+          <div class="tutor-actions">
+            <button type="button" class="tutor-action" data-action="tutor-explain"><span class="ta-ic">✨</span><span><strong>Explain it</strong><small>Step-by-step, like a teacher</small></span></button>
+            <button type="button" class="tutor-action" data-action="tutor-flashcards"><span class="ta-ic">🎴</span><span><strong>Make flashcards</strong><small>Study the key ideas</small></span></button>
+            <button type="button" class="tutor-action" data-action="tutor-quiz"><span class="ta-ic">📝</span><span><strong>Quiz me</strong><small>Test your understanding</small></span></button>
+          </div>
+
+          <div id="tutor-output" class="tutor-output"></div>
+        </div>
+
+        <div class="card" id="decks-card" hidden>
+          <h3>Saved flashcard decks</h3>
+          <div id="deck-list" class="deck-list"></div>
+        </div>
       </section>
 
       <!-- GRADES -->

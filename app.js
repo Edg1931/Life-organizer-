@@ -8,7 +8,7 @@
   const blank = {
     workouts: [], school: [], tasks: [],
     wrestling: [], baseball: [], football: [], golf: [], lifts: [], checkins: [],
-    courses: [], finances: [], goals: [], templates: [], foods: [], events: [],
+    courses: [], finances: [], goals: [], templates: [], foods: [], events: [], decks: [],
     settings: { lunchUrl: "", name: "", aiBase: "", eligGpa: 2.0, calorieGoal: 2400, matchWeight: null, nextEvent: { name: "", date: "" } },
   };
 
@@ -478,6 +478,7 @@
     renderMoney();
     renderNutrition();
     renderTasks();
+    renderDecks();
     fillSettings();
   }
 
@@ -1346,6 +1347,244 @@
     } catch (err) {
       openModal(item.title, esc(aiErrorText(err)));
     }
+  });
+
+  // ============ HOMEWORK HELPER ============
+  let tutorSubject = "math";
+  let tutorImage = null;     // { mediaType, data } base64, no data-URL prefix
+  let pendingDeck = null;    // last generated, not-yet-saved flashcard deck
+
+  const SUBJECT_NAMES = { math: "Math", science: "Science", english: "English", history: "History", language: "Foreign Language", cs: "Comp Sci", other: "Other" };
+  const subjectName = (k) => SUBJECT_NAMES[k] || "Other";
+
+  async function aiCallFull(kind, payload) {
+    const base = data.settings.aiBase || "";
+    const res = await fetch(`${base}/api/ai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, payload }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `Request failed (${res.status}).`);
+    return json;
+  }
+
+  // Shrink a photo before upload so it stays well under serverless body limits.
+  function resizePhoto(file, max = 1280, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("read"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("decode"));
+        img.onload = () => {
+          let { width, height } = img;
+          const longest = Math.max(width, height);
+          if (longest > max) { const s = max / longest; width = Math.round(width * s); height = Math.round(height * s); }
+          const canvas = document.createElement("canvas");
+          canvas.width = width; canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  document.getElementById("subject-grid").addEventListener("click", (e) => {
+    const chip = e.target.closest(".subject-chip");
+    if (!chip) return;
+    document.querySelectorAll(".subject-chip").forEach((c) => c.classList.remove("active"));
+    chip.classList.add("active");
+    tutorSubject = chip.dataset.subject;
+  });
+
+  document.getElementById("hw-photo").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizePhoto(file);
+      tutorImage = { mediaType: "image/jpeg", data: dataUrl.split(",")[1] };
+      const prev = document.getElementById("hw-preview");
+      prev.src = dataUrl; prev.hidden = false;
+      document.getElementById("photo-drop-empty").hidden = true;
+      document.getElementById("photo-clear").hidden = false;
+      document.getElementById("photo-drop").classList.add("has-photo");
+    } catch {
+      alert("Couldn't read that image. Try another photo.");
+    }
+  });
+
+  document.getElementById("photo-clear").addEventListener("click", () => {
+    tutorImage = null;
+    document.getElementById("hw-photo").value = "";
+    const prev = document.getElementById("hw-preview");
+    prev.src = ""; prev.hidden = true;
+    document.getElementById("photo-drop-empty").hidden = false;
+    document.getElementById("photo-clear").hidden = true;
+    document.getElementById("photo-drop").classList.remove("has-photo");
+  });
+
+  const tutorErr = (msg) => `<div class="tutor-error">${esc(msg)}</div>`;
+  const loadingLabel = (kind) =>
+    kind === "tutor-flashcards" ? "Building your flashcards…"
+    : kind === "tutor-quiz" ? "Writing your practice quiz…"
+    : "Reading your problem…";
+
+  function flashcardsHTML(cards) {
+    return `<div class="flashcards">${cards.map((c, i) => `
+      <button type="button" class="flashcard" data-i="${i}">
+        <span class="fc-inner">
+          <span class="fc-face fc-front"><span class="fc-tag">Card ${i + 1}</span><span class="fc-text">${esc(c.front)}</span></span>
+          <span class="fc-face fc-back"><span class="fc-tag">Answer</span><span class="fc-text">${esc(c.back)}</span></span>
+        </span>
+      </button>`).join("")}</div>`;
+  }
+
+  function renderExplain(out, text) {
+    const d = document.createElement("div");
+    d.className = "ai-output";
+    d.textContent = text || "No response.";
+    out.innerHTML = "";
+    out.appendChild(d);
+  }
+
+  function renderGeneratedDeck(out, deck) {
+    pendingDeck = deck;
+    out.innerHTML = `<div class="result-head">
+        <h4 class="result-title">${esc(deck.title || "Flashcards")}</h4>
+        <button type="button" class="btn-ghost" id="save-deck">＋ Save deck</button>
+      </div>
+      <p class="result-tip">Tap a card to flip it.</p>
+      ${flashcardsHTML(deck.cards)}`;
+  }
+
+  function renderQuiz(out, quiz) {
+    const qs = Array.isArray(quiz.questions) ? quiz.questions : [];
+    out.innerHTML = `<h4 class="result-title">${esc(quiz.title || "Practice quiz")}</h4>
+      <p class="result-tip">Pick an answer to see if you're right.</p>
+      <div class="quiz">${qs.map((q, qi) => `
+        <div class="quiz-q" data-answer="${Number(q.answer) || 0}">
+          <div class="quiz-prompt"><span class="quiz-num">${qi + 1}</span><span>${esc(q.q)}</span></div>
+          <div class="quiz-choices">${(q.choices || []).map((ch, ci) => `
+            <button type="button" class="quiz-choice" data-c="${ci}">${esc(ch)}</button>`).join("")}</div>
+          <div class="quiz-why" hidden>${esc(q.why || "")}</div>
+        </div>`).join("")}</div>
+      <div class="quiz-score" id="quiz-score" hidden></div>`;
+  }
+
+  document.querySelector(".tutor-actions").addEventListener("click", async (e) => {
+    const btn = e.target.closest(".tutor-action");
+    if (!btn) return;
+    const kind = btn.dataset.action;
+    const out = document.getElementById("tutor-output");
+    const question = document.getElementById("hw-question").value.trim();
+    if (!tutorImage && !question) {
+      out.innerHTML = tutorErr("Add a photo of the homework or type the problem first.");
+      return;
+    }
+    const actions = document.querySelectorAll(".tutor-action");
+    actions.forEach((b) => (b.disabled = true));
+    out.innerHTML = `<div class="tutor-loading"><span class="spinner"></span>${loadingLabel(kind)}</div>`;
+    try {
+      const json = await aiCallFull(kind, { subject: tutorSubject, question, image: tutorImage });
+      if (kind === "tutor-explain") {
+        renderExplain(out, json.text);
+      } else if (kind === "tutor-flashcards") {
+        if (json.data && Array.isArray(json.data.cards) && json.data.cards.length) renderGeneratedDeck(out, json.data);
+        else renderExplain(out, json.text || "I couldn't turn that into flashcards — try a clearer photo.");
+      } else if (kind === "tutor-quiz") {
+        if (json.data && Array.isArray(json.data.questions) && json.data.questions.length) renderQuiz(out, json.data);
+        else renderExplain(out, json.text || "I couldn't turn that into a quiz — try a clearer photo.");
+      }
+    } catch (err) {
+      out.innerHTML = tutorErr(aiErrorText(err));
+    } finally {
+      actions.forEach((b) => (b.disabled = false));
+    }
+  });
+
+  function saveDeck() {
+    if (!pendingDeck) return;
+    data.decks.push({
+      id: uid(),
+      title: pendingDeck.title || "Flashcards",
+      subject: tutorSubject,
+      cards: pendingDeck.cards,
+      created: todayISO(),
+    });
+    save();
+    renderDecks();
+    const btn = document.getElementById("save-deck");
+    if (btn) { btn.textContent = "✓ Saved"; btn.disabled = true; }
+  }
+
+  function handleQuizChoice(choice) {
+    const qEl = choice.closest(".quiz-q");
+    if (!qEl || qEl.classList.contains("answered")) return;
+    qEl.classList.add("answered");
+    choice.classList.add("picked");
+    const correct = Number(qEl.dataset.answer);
+    qEl.querySelectorAll(".quiz-choice").forEach((b) => {
+      b.disabled = true;
+      const ci = Number(b.dataset.c);
+      if (ci === correct) b.classList.add("correct");
+      else if (b.classList.contains("picked")) b.classList.add("wrong");
+    });
+    const why = qEl.querySelector(".quiz-why");
+    if (why) why.hidden = false;
+    const all = document.querySelectorAll(".quiz-q");
+    if (![...all].every((q) => q.classList.contains("answered"))) return;
+    const got = document.querySelectorAll(".quiz-choice.correct.picked").length;
+    const pct = Math.round((got / all.length) * 100);
+    const el = document.getElementById("quiz-score");
+    el.hidden = false;
+    el.textContent = `You got ${got} / ${all.length} (${pct}%). ` +
+      (pct === 100 ? "Perfect — you've got this!" : pct >= 70 ? "Solid — review the ones you missed." : "Keep at it — read the explanations and try again.");
+  }
+
+  // Delegated interactions for the whole tutor view (flips, save, quiz, decks).
+  document.getElementById("view-tutor").addEventListener("click", (e) => {
+    const card = e.target.closest(".flashcard");
+    if (card) { card.classList.toggle("flipped"); return; }
+    if (e.target.closest("#save-deck")) { saveDeck(); return; }
+    const choice = e.target.closest(".quiz-choice");
+    if (choice) { handleQuizChoice(choice); return; }
+    const del = e.target.closest(".deck-del");
+    if (del) { data.decks = data.decks.filter((d) => d.id !== del.dataset.id); save(); renderDecks(); return; }
+    const toggle = e.target.closest(".deck-toggle");
+    if (toggle) {
+      const body = document.getElementById("deck-body-" + toggle.dataset.id);
+      if (body) body.hidden = !body.hidden;
+      toggle.classList.toggle("open");
+    }
+  });
+
+  function renderDecks() {
+    const card = document.getElementById("decks-card");
+    const list = document.getElementById("deck-list");
+    if (!card || !list) return;
+    if (!data.decks.length) { card.hidden = true; list.innerHTML = ""; return; }
+    card.hidden = false;
+    list.innerHTML = [...data.decks].reverse().map((d) => `
+      <div class="deck">
+        <div class="deck-header">
+          <button type="button" class="deck-toggle" data-id="${d.id}">
+            <span class="deck-name">${esc(d.title)}</span>
+            <span class="deck-meta">${d.cards.length} cards · ${esc(subjectName(d.subject))} · ${fmtDate(d.created)}</span>
+            <span class="deck-caret">›</span>
+          </button>
+          <button type="button" class="del deck-del" data-id="${d.id}" title="Delete deck">×</button>
+        </div>
+        <div class="deck-body" id="deck-body-${d.id}" hidden>${flashcardsHTML(d.cards)}</div>
+      </div>`).join("");
+  }
+
+  // Jump links (e.g. "Homework Helper" from the School hint).
+  document.querySelector(".content").addEventListener("click", (e) => {
+    const lb = e.target.closest(".link-btn[data-view]");
+    if (lb) showView(lb.dataset.view);
   });
 
   document.body.dataset.view = "dashboard";
