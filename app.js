@@ -225,14 +225,31 @@
   document.getElementById("lf-date").value = todayISO();
   lfForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    data.lifts.push({
-      id: uid(), date: val("lf-date"), exercise: val("lf-exercise").trim(),
-      weight: num("lf-weight") || 0, reps: int("lf-reps") || 0, sets: int("lf-sets") || 1,
-    });
+    const exercise = val("lf-exercise").trim();
+    const weight = num("lf-weight") || 0;
+    const reps = int("lf-reps") || 0;
+    const key = exercise.toLowerCase();
+    const prevBest = data.lifts.filter((l) => l.exercise.toLowerCase() === key)
+      .reduce((m, l) => Math.max(m, l.weight), 0);
+    data.lifts.push({ id: uid(), date: val("lf-date"), exercise, weight, reps, sets: int("lf-sets") || 1 });
     save(); lfForm.reset();
     document.getElementById("lf-date").value = todayISO();
     document.getElementById("lf-sets").value = 1;
     render();
+    if (weight > prevBest && prevBest > 0) {
+      openModal("New personal best! 🎉", esc(`${exercise}: ${trimNum(weight)} lb × ${reps}\n\nThat beats your old best of ${trimNum(prevBest)} lb. Keep stacking PRs.`));
+    }
+  });
+
+  document.getElementById("lift-pick").addEventListener("change", (e) => { liftPick = e.target.value; renderLiftChart(); });
+
+  document.getElementById("health-ai").addEventListener("click", async () => {
+    const out = document.getElementById("health-ai-out");
+    const btn = document.getElementById("health-ai");
+    btn.disabled = true; out.textContent = "Thinking…";
+    try { out.textContent = await aiCall("insights", insightsPayload()); }
+    catch (err) { out.textContent = aiErrorText(err); }
+    finally { btn.disabled = false; }
   });
 
   // Settings forms
@@ -457,6 +474,70 @@
       statCard((avgSleep ? avgSleep.toFixed(1) : "–") + "<small> h</small>", "Avg sleep (7d)") +
       statCard(last && last.weight ? last.weight : "–", "Latest weight");
     renderVolumeChart();
+    renderSuggestions();
+    renderLiftChart();
+  }
+
+  const ytSearch = (q) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+
+  function renderSuggestions() {
+    const el = document.getElementById("health-suggestions");
+    const tips = [];
+    const dates = data.workouts.map((w) => w.date).sort();
+    if (dates.length) {
+      const gap = -daysUntil(dates[dates.length - 1]);
+      if (gap >= 3) tips.push(["⏰", `It's been ${gap} days since your last workout — time to get moving.`]);
+    } else {
+      tips.push(["🏁", "Log your first workout to start building a streak."]);
+    }
+    const wkStart = mondayOf(new Date());
+    const weekMin = data.workouts.filter((w) => new Date(w.date + "T00:00:00") >= wkStart).reduce((s, w) => s + (w.duration || 0), 0);
+    if (weekMin > 0 && weekMin < 150) tips.push(["📈", `${weekMin} active min this week — ${150 - weekMin} more reaches a solid weekly target.`]);
+    if (weekMin >= 150) tips.push(["💪", `${weekMin} active minutes this week — crushing it.`]);
+    const st = streakInfo(data.workouts.map((x) => x.date));
+    if (st.current >= 6) tips.push(["🧘", `${st.current}-day streak — work in a mobility or rest day to recover.`]);
+    const avgSleep = avgField(data.checkins.slice(-7), "sleep");
+    if (avgSleep != null && avgSleep < 7) tips.push(["😴", `Avg sleep is ${avgSleep.toFixed(1)}h — aim for 8+ for recovery and focus.`]);
+    // strength progression on your most-logged lift
+    const counts = {};
+    data.lifts.forEach((l) => { const k = l.exercise.toLowerCase(); (counts[k] = counts[k] || []).push(l); });
+    let topEx = null, topN = 0;
+    Object.values(counts).forEach((arr) => { if (arr.length > topN) { topN = arr.length; topEx = arr; } });
+    if (topEx && topEx.length >= 2) {
+      const sorted = [...topEx].sort((a, b) => a.date.localeCompare(b.date));
+      const a = sorted[sorted.length - 2], b = sorted[sorted.length - 1];
+      if (b.weight <= a.weight && b.reps >= 8) tips.push(["⬆️", `${b.exercise}: you hit ${b.reps} reps at ${trimNum(b.weight)} lb — try +5 lb next session.`]);
+    }
+    const recentTypes = new Set(data.workouts.slice(-8).map((w) => w.type));
+    if (data.workouts.length >= 5 && recentTypes.size === 1) tips.push(["🔀", `Recent sessions are all ${[...recentTypes][0]} — mix in another style to round out your fitness.`]);
+
+    el.innerHTML = tips.length
+      ? tips.slice(0, 6).map(([i, t]) => `<div class="sug"><span class="sug-i">${i}</span><span>${esc(t)}</span></div>`).join("")
+      : `<div class="sug"><span class="sug-i">✅</span><span>Everything looks balanced — keep it up!</span></div>`;
+  }
+
+  let liftPick = null;
+  function renderLiftChart() {
+    const sel = document.getElementById("lift-pick");
+    const chart = document.getElementById("lift-chart");
+    const exercises = [...new Set(data.lifts.map((l) => l.exercise))].sort((a, b) => a.localeCompare(b));
+    if (!exercises.length) {
+      sel.innerHTML = `<option>No lifts yet</option>`;
+      chart.innerHTML = `<div class="empty-state" style="width:100%">Log lifts to see your progress.</div>`;
+      return;
+    }
+    if (!liftPick || !exercises.includes(liftPick)) liftPick = exercises[0];
+    sel.innerHTML = exercises.map((e) => `<option ${e === liftPick ? "selected" : ""}>${esc(e)}</option>`).join("");
+    const byDate = {};
+    data.lifts.filter((l) => l.exercise === liftPick).forEach((l) => { byDate[l.date] = Math.max(byDate[l.date] || 0, l.weight); });
+    const sessions = Object.entries(byDate).sort((a, b) => a[0].localeCompare(b[0])).slice(-10);
+    const max = Math.max(...sessions.map((s) => s[1]), 1);
+    chart.innerHTML = sessions.map(([d, w]) => `
+      <div class="bar-wrap" title="${trimNum(w)} lb on ${fmtDate(d)}">
+        <span class="bar-val">${trimNum(w)}</span>
+        <div class="bar" style="height:${(w / max) * 100}%"></div>
+        <span class="bar-label">${d.slice(5).replace("-", "/")}</span>
+      </div>`).join("");
   }
 
   function avgField(arr, f) {
@@ -591,6 +672,7 @@
         <div class="pr-name">${esc(e.name)}</div>
         <div class="pr-val">${trimNum(e.maxWeight)}<small> lb × ${e.bestSet.reps}</small></div>
         <div class="pr-sub">est. 1RM ${trimNum(Math.round(e.oneRm))} lb</div>
+        <a class="vid-link" href="${ytSearch(e.name + " proper form technique")}" target="_blank" rel="noopener">▶ Form video</a>
       </div>`).join("") : `<div class="empty-state">Log a lift to start tracking PRs.</div>`;
 
     const el = document.getElementById("lift-list");
